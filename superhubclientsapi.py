@@ -5,7 +5,7 @@ import hashlib
 # Yarde Superhub Client API (WiFi Doorbell Transponder) by Nicholas Elliott
 # Designed for a wifi doorbell project but can be used for other things I guess?
 
-version = "0.1.1";
+version = "0.1.2";
 superhub_password = "00000000"; # unused, haven't had time to look at exactly how their login script works.
 superhub_cookie_header = ""; # do not modify. this is where the session cookie is stored. a new one is generated with each request anyway.
 superhub_ip_addr = "192.168.0.1"; # the ip addr of your superhub.
@@ -18,12 +18,17 @@ superhub_key2 = "61808";
 superhub_key3 = "1506529783091";
 superhub_req_ext = "&_n="+superhub_key2+"&_="+superhub_key3; # do not modify, this is attached to the end of each request.
 
-# verbose modes determine how much data is output. 0 - only result, 1 - output normal and result, 2 - output normal, extended, and result. 1 is default.
-verbose_mode = 1;
+set_verbose_mode = 1; # verbose modes determine how much data is output. 0 - only result, 1 - output normal and result, 2 - output normal, extended, and result, 3 - debug. 1 is default.
+set_list_mode = 0; # list modes determine how the data is output. 0 - console inline, 1 - console table (not working yet), 2 - json-compatible string (WARNING: PLEASE DO SUFFICENT TESTING IF INTENDING TO USE PUBLICLY WITH CGI)
+# if console output capture is being used, please check the exit code. errors will be sent though standard output, followed by an erroneous exit code.
 
 # superhub data identifiers
 # 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.3.200.1.4. IP address and hostname prefix
 # 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.14.200.1.4. IP address and device connection status
+
+def printx(text="",verbosetype=1):
+	if set_verbose_mode >= verbosetype:
+		print(text);
 
 # the web function is in charge of tcp requests.
 def web(addr,customheader="Cache-Control: no-cache"):
@@ -42,7 +47,7 @@ def web(addr,customheader="Cache-Control: no-cache"):
 	for header in request_headers_array:
 		request_headers_string = request_headers_string + header + "\r\n";
 	request_headers_string = request_headers_string + "\r\n"; # this line is in the right place, do not tab it. thx. this ends the header, lighttpd doesn't respond without double carriage return and newline
-	#print(request_headers_string); # debugging stuff
+	printx(request_headers_string,3); # debugging stuff
 	try:
 		socket_instance = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
 		socket_instance.connect((svr_addr,80));
@@ -56,8 +61,8 @@ def web(addr,customheader="Cache-Control: no-cache"):
 		status = "OK"
 	except:
 		status = "NOTOK"
-		print("--> Socket error, please check connection settings.");
-	#print(response); # debugging stuff
+		printx("--> Socket error, please check connection settings.",2);
+	printx(response,3); # debugging stuff
 	return [status,response];
 
 # the hubfind function is used to find the hub.
@@ -82,24 +87,23 @@ def hublogin(hubpass=""):
 	return True;
 
 # validate that the login attempt was actually successful
-def hubsession():
+def hubsession_prt():
 	session_test = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.2.2.1.1;"+superhub_req_ext,superhub_cookie_header);
 	if session_test[0] == "NOTOK": # if there was a socket error then return false.
 		return False;
 	if session_test[1][:15] != "HTTP/1.1 200 OK":
+		printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
 		return False;
 	return True;
 
 # get a list of clients connected to the hub and other info about them
 def hubclientdata():
-	'''
 	clients_list_raw = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.2.4.2;"+superhub_req_ext,superhub_cookie_header);
 	if clients_list_raw[0] == "NOTOK": # if there was a socket error then return false.
 		return "";
 	return clients_list_raw[1].split("\r\n\r\n",1)[1]; # return a json formatted string
-	'''
-	print("**WARNING: SIMULATED DATA FOR TESTING!");
-	return open("C:/Users/yardefaragunle/Documents/Python/TESTDATA.txt","r").read();
+	##printx("**WARNING: SIMULATED DATA FOR TESTING!",0);
+	##return open("C:/Users/yardefaragunle/Documents/Python/TESTDATA.txt","r").read();
 
 # filter and sort the client data. _prt means this function prints to the screen.
 def clientsort_prt(jsonstring):
@@ -125,7 +129,7 @@ def clientsort_prt(jsonstring):
 	for item in temp_storage:
 		item = re.sub(id_ipaddr_hostname, "", item);
 		devices_all.append(item.split(":"));
-	print("--> "+str(len(temp_storage))+" devices identified");
+	printx("--> "+str(len(temp_storage))+" devices identified",2);
 	temp_storage = [];
 
 	# put the ip addresses and connection status into their relevant list
@@ -138,51 +142,70 @@ def clientsort_prt(jsonstring):
 	temp_storage = [];
 
 	if len(devices_all) != len(devices_connected): # make sure both datasets have an equal amount of entries
-		print("--! Warning: Your Super Hub has an unequal amount of devices vs connected status.");
+		printx("--! Warning: Your Super Hub has an unequal amount of devices vs connected status.",2);
 
 	# merge data into the connected_devices list
 	for item in devices_all:
 		for connstatus in devices_connected:
 			if item[0] == connstatus[0]:
 				connected_devices.append([item[1],connstatus[1],item[0]]); ####### INTERACTION WITH OUTSIDE VARIABLE
-	print("--> Matched devices: "+str(len(connected_devices))+"/"+str(len(devices_all)));
+	printx("--> Matched devices: "+str(len(connected_devices))+"/"+str(len(devices_all)),2);
 
 	# show how many of the devices are connected out of the detected devices
 	for item in connected_devices:
 		if item[1] == "1":
 			devices_connected_count += 1;
-	print("--> Connected devices: "+str(devices_connected_count)+"/"+str(len(connected_devices)));
+	printx("--> Connected devices: "+str(devices_connected_count)+"/"+str(len(connected_devices)),2);
 	return True;
 
-def clientlist_prt(clientstring):
-	print(clientstring);
-	# should print client list dependent on list mode
+def clientlist_prt(clientlist):
+	if set_list_mode == 0: # print console normal output
+		printx(" ==  CONNECTED DEVICES  == ",0);
+		printx("",0);
+		for item in clientlist:
+			if item[1] == "1":
+				printx("("+item[2]+") "+item[0],0);
+		printx("",0);
+		printx("",0);
+		printx(" ==  DISCONNECTED DEVICES  == ",0);
+		printx("",0);
+		for item in clientlist:
+			if item[1] == "0":
+				printx("("+item[2]+") "+item[0],0);
+	elif set_list_mode == 1:
+		exit(1);
+	else:
+		clients = str(clientlist);
+		clients = re.sub(r"'","\"",clients);
+		printx(clients,0); # print json compatible string
 
 def main():
-	print("Yarde Superhub Client API (Part of the Wifi Doorbell Transponder Project) by Nicholas Elliott");
-	print("Version "+version);
-	print();
-	print("Searching for superhub ("+superhub_ip_addr+")...");
+	printx("Yarde Superhub Client API (Part of the Wifi Doorbell Transponder Project) by Nicholas Elliott");
+	printx("Version "+version);
+	printx();
+	printx("Searching for superhub ("+superhub_ip_addr+")...");
 	if not hubfind():
-		print("Could not find superhub. Comment out this part of the script to force find.");
+		printx("Could not find superhub. Comment out this part of the script to force find.");
 		exit(1);
-	print("Logging in...");
+	printx("Logging in...");
 	if not hublogin():
-		print("Could not login to superhub.");
+		printx("Could not login to superhub.");
 		exit(1);
-	print("Validating login...");
-	if not hubsession():
-		print("The login could not be validated. Retrying usually fixes this random error.");
+	printx("Validating login...");
+	if not hubsession_prt():
+		printx("The login could not be validated. Retrying usually fixes this random error.");
 		exit(1);
-	print("Retrieving client data... This can take between 20 seconds up to 2 minutes.");
+	printx("Retrieving client data... This can take between 20 seconds up to 2 minutes.");
 	client_data = hubclientdata();
 	if len(client_data) < 1:
-		print("The connected clients could not be retrieved.");
+		printx("The connected clients could not be retrieved.");
 		exit(1);
-	print("Sorting data, please wait...");
+	printx("Sorting data, please wait...");
 	if not clientsort_prt(client_data):
-		print("An error occured while sorting the client list.");
+		printx("An error occured while sorting the client list.");
 		exit(1);
+	printx();
 	clientlist_prt(connected_devices);
+	exit(0);
 
 main();
