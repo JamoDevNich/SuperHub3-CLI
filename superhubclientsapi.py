@@ -128,7 +128,32 @@ def clientsort_prt(jsonstring):
 	print("--> "+str(len(temp_storage))+" devices identified");
 	temp_storage = [];
 
-	print(jsonstring);
+	# put the ip addresses and connection status into their relevant list
+	for item in client_data:
+		if item[:len(id_ipaddr_connstat)] == id_ipaddr_connstat:
+			temp_storage.append(item);
+	for item in temp_storage:
+		item = re.sub(id_ipaddr_connstat, "", item);
+		devices_connected.append(item.split(":"));
+	temp_storage = [];
+
+	if len(devices_all) != len(devices_connected): # make sure both datasets have an equal amount of entries
+		print("--! Warning: Your Super Hub has an unequal amount of devices vs connected status.");
+
+	# merge data into the connected_devices list
+	for item in devices_all:
+		for connstatus in devices_connected:
+			if item[0] == connstatus[0]:
+				connected_devices.append([item[1],connstatus[1],item[0]]); ####### INTERACTION WITH OUTSIDE VARIABLE
+	print("--> Matched devices: "+str(len(connected_devices))+"/"+str(len(devices_all)));
+
+	# show how many of the devices are connected out of the detected devices
+	for item in connected_devices:
+		if item[1] == "1":
+			devices_connected_count += 1;
+	print("--> Connected devices: "+str(devices_connected_count)+"/"+str(len(connected_devices)));
+	return True;
+
 def clientlist_prt(clientstring):
 	print(clientstring);
 	# should print client list dependent on list mode
@@ -158,5 +183,6 @@ def main():
 	if not clientsort_prt(client_data):
 		print("An error occured while sorting the client list.");
 		exit(1);
+	clientlist_prt(connected_devices);
 
 main();
