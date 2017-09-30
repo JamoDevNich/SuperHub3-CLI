@@ -5,11 +5,11 @@ import hashlib
 # Yarde Superhub Client API (WiFi Doorbell Transponder) by Nicholas Elliott
 # Designed for a wifi doorbell project but can be used for other things I guess?
 
-version = "0.1.2";
+version = "0.1.3";
 superhub_password = "00000000"; # unused, haven't had time to look at exactly how their login script works.
 superhub_cookie_header = ""; # do not modify. this is where the session cookie is stored. a new one is generated with each request anyway.
 superhub_ip_addr = "192.168.0.1"; # the ip addr of your superhub.
-connected_devices = []; # stored in the format HOSTNAME - CONN STATUS - IP ADDRESS. DO NOT CONFUSE WITH DEVICES_CONNECTED ETC...
+connected_devices = []; # stored in the format HOSTNAME - CONN STATUS - IP ADDRESS - MAC ADDRESS. DO NOT CONFUSE WITH DEVICES_CONNECTED ETC...
 
  # To get access to the keys for the superhub login system, you need to perform an ajax login and capture the data sent using your browser's developer tools.
  # the string will look like this: http://192.168.0.1/login?arg=KEY1&_n=KEY2&_=KEY3 where KEY# is each key number.
@@ -19,12 +19,13 @@ superhub_key3 = "1506529783091";
 superhub_req_ext = "&_n="+superhub_key2+"&_="+superhub_key3; # do not modify, this is attached to the end of each request.
 
 set_verbose_mode = 1; # verbose modes determine how much data is output. 0 - only result, 1 - output normal and result, 2 - output normal, extended, and result, 3 - debug. 1 is default.
-set_list_mode = 0; # list modes determine how the data is output. 0 - console inline, 1 - console table (not working yet), 2 - json-compatible string (WARNING: PLEASE DO SUFFICENT TESTING IF INTENDING TO USE PUBLICLY WITH CGI)
+set_list_mode = 0; # list modes determine how the data is output. 0 - console inline, 1 - no output ideal when using with other scripts, 2 - json-compatible string (WARNING: PLEASE DO SUFFICENT TESTING IF INTENDING TO USE PUBLICLY WITH CGI)
 # if console output capture is being used, please check the exit code. errors will be sent though standard output, followed by an erroneous exit code.
 
 # superhub data identifiers
 # 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.3.200.1.4. IP address and hostname prefix
 # 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.14.200.1.4. IP address and device connection status
+# 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.4.200.1.4. IP address and MAC Address
 
 def printx(text="",verbosetype=1):
 	if set_verbose_mode >= verbosetype:
@@ -102,19 +103,24 @@ def hubclientdata():
 	if clients_list_raw[0] == "NOTOK": # if there was a socket error then return false.
 		return "";
 	return clients_list_raw[1].split("\r\n\r\n",1)[1]; # return a json formatted string
-	##printx("**WARNING: SIMULATED DATA FOR TESTING!",0);
-	##return open("C:/Users/yardefaragunle/Documents/Python/TESTDATA.txt","r").read();
+	#printx("**WARNING: SIMULATED DATA FOR TESTING!",0);
+	#return open("C:/Users/yardefaragunle/Documents/Python/TESTDATA2.txt","r").read();
 
 # filter and sort the client data. _prt means this function prints to the screen.
 def clientsort_prt(jsonstring):
 	global connected_devices;
 	id_ipaddr_hostname = "1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.3.200.1.4."; # the prefix for ip address + hostnames
 	id_ipaddr_connstat = "1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.14.200.1.4."; # the prefix for ip address + connection status
+	id_ipaddr_macaddrs = "1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.4.200.1.4."; # the prefix for ip address + mac address
 	client_data = []; # all data retrieved from the hub goes here. each entry is in the superhub's format (prefix + ip address + data)
 	temp_storage = []; # temporary storage used for list altering
 	devices_all = []; # list containing all ips and hostnames
+	devices_macaddrs = []; # list containing all ips and mac addresses
 	devices_connected = []; # list containing all ips and connection status
 	devices_connected_count = 0;
+
+	if not jsonstring[len(jsonstring)-1:len(jsonstring)] == "}": # check if the jsonstring has a closing bracket, sometimes hub will not end the string properly.
+		printx("--! Warning: Dataset is not complete. All devices may not be validatable.",2);
 
 	jsonstring = re.sub(r"{|}|\"", "", jsonstring); # strip the separators from the data
 	jsonstring = re.sub(r"\n", "", jsonstring); # strip the newline chars. apparently re.sub isn't recommended for this?
@@ -132,6 +138,20 @@ def clientsort_prt(jsonstring):
 	printx("--> "+str(len(temp_storage))+" devices identified",2);
 	temp_storage = [];
 
+	# put the ip addresses and mac addresses into their relevant list
+	for item in client_data:
+		if item[:len(id_ipaddr_macaddrs)] == id_ipaddr_macaddrs:
+			temp_storage.append(item);
+	for item in temp_storage:
+		item = re.sub(id_ipaddr_macaddrs, "", item);
+		item = re.sub(r"\$","",item); # remove the dollar signs preceeding each MAC address
+		temp_storage_local_0 = item.split(":"); # split the list into ipaddr and mac. this has to be done so the mac can be formatted properly
+		temp_storage_local_1 = [temp_storage_local_0[1][i:i+2] for i in range(0, 12, 2)]; # split the string into a list containing pairs of 2 chars
+		temp_storage_local_0[1] = ":".join(temp_storage_local_1); # join strings with ":" symbol
+		devices_macaddrs.append(temp_storage_local_0);
+	printx("--> "+str(len(temp_storage))+" mac addresses identified",2);
+	temp_storage = [];
+
 	# put the ip addresses and connection status into their relevant list
 	for item in client_data:
 		if item[:len(id_ipaddr_connstat)] == id_ipaddr_connstat:
@@ -139,16 +159,18 @@ def clientsort_prt(jsonstring):
 	for item in temp_storage:
 		item = re.sub(id_ipaddr_connstat, "", item);
 		devices_connected.append(item.split(":"));
+	printx("--> "+str(len(temp_storage))+" devices validated",2);
 	temp_storage = [];
 
-	if len(devices_all) != len(devices_connected): # make sure both datasets have an equal amount of entries
-		printx("--! Warning: Your Super Hub has an unequal amount of devices vs connected status.",2);
+	#if len(devices_all) != len(devices_connected): # make sure both datasets have an equal amount of entries
+	#	printx("--! Warning: Your Super Hub has an unequal amount of devices vs mac addresses .",2);
 
 	# merge data into the connected_devices list
 	for item in devices_all:
 		for connstatus in devices_connected:
-			if item[0] == connstatus[0]:
-				connected_devices.append([item[1],connstatus[1],item[0]]); ####### INTERACTION WITH OUTSIDE VARIABLE
+			for macaddrlist in devices_macaddrs:
+				if item[0] == connstatus[0] and item[0] == macaddrlist[0]:
+					connected_devices.append([item[1],connstatus[1],item[0],macaddrlist[1]]); ####### INTERACTION WITH OUTSIDE VARIABLE
 	printx("--> Matched devices: "+str(len(connected_devices))+"/"+str(len(devices_all)),2);
 
 	# show how many of the devices are connected out of the detected devices
@@ -164,16 +186,16 @@ def clientlist_prt(clientlist):
 		printx("",0);
 		for item in clientlist:
 			if item[1] == "1":
-				printx("("+item[2]+") "+item[0],0);
+				printx("("+item[2]+") ("+item[3]+") "+item[0],0);
 		printx("",0);
 		printx("",0);
 		printx(" ==  DISCONNECTED DEVICES  == ",0);
 		printx("",0);
 		for item in clientlist:
 			if item[1] == "0":
-				printx("("+item[2]+") "+item[0],0);
+				printx("("+item[2]+") ("+item[3]+") "+item[0],0);
 	elif set_list_mode == 1:
-		exit(1);
+		pass;
 	else:
 		clients = str(clientlist);
 		clients = re.sub(r"'","\"",clients);
@@ -185,27 +207,21 @@ def main():
 	printx();
 	printx("Searching for superhub ("+superhub_ip_addr+")...");
 	if not hubfind():
-		printx("Could not find superhub. Comment out this part of the script to force find.");
-		exit(1);
+		raise Exception("Could not find superhub. Comment out this part of the script to force find.");
 	printx("Logging in...");
 	if not hublogin():
-		printx("Could not login to superhub.");
-		exit(1);
+		raise Exception("Could not login to superhub.");
 	printx("Validating login...");
 	if not hubsession_prt():
-		printx("The login could not be validated. Retrying usually fixes this random error.");
-		exit(1);
+		raise Exception("The login could not be validated. Retrying usually fixes this random error.");
 	printx("Retrieving client data... This can take between 20 seconds up to 2 minutes.");
 	client_data = hubclientdata();
 	if len(client_data) < 1:
-		printx("The connected clients could not be retrieved.");
-		exit(1);
+		raise Exception("The connected clients could not be retrieved.");
 	printx("Sorting data, please wait...");
 	if not clientsort_prt(client_data):
-		printx("An error occured while sorting the client list.");
-		exit(1);
+		raise Exception("An error occured while sorting the client list.");
 	printx();
 	clientlist_prt(connected_devices);
-	exit(0);
 
 main();
