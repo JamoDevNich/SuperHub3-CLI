@@ -5,7 +5,7 @@ import hashlib
 # Yarde Superhub Client API (WiFi Doorbell Transponder) by Nicholas Elliott
 # Designed for a wifi doorbell project but can be used for other things I guess?
 
-version = "0.1.3";
+version = "0.1.4";
 superhub_password = "00000000"; # unused, haven't had time to look at exactly how their login script works.
 superhub_cookie_header = ""; # do not modify. this is where the session cookie is stored. a new one is generated with each request anyway.
 superhub_ip_addr = "192.168.0.1"; # the ip addr of your superhub.
@@ -13,9 +13,9 @@ connected_devices = []; # stored in the format HOSTNAME - CONN STATUS - IP ADDRE
 
  # To get access to the keys for the superhub login system, you need to perform an ajax login and capture the data sent using your browser's developer tools.
  # the string will look like this: http://192.168.0.1/login?arg=KEY1&_n=KEY2&_=KEY3 where KEY# is each key number.
-superhub_key1 = "YWRtaW46MTQ5MTk5Nzg=";
-superhub_key2 = "61808";
-superhub_key3 = "1506529783091";
+superhub_key1 = "YWRtaW46MTUwNzg0Njk=";
+superhub_key2 = "74627";
+superhub_key3 = "1508353476324";
 superhub_req_ext = "&_n="+superhub_key2+"&_="+superhub_key3; # do not modify, this is attached to the end of each request.
 
 set_verbose_mode = 1; # verbose modes determine how much data is output. 0 - only result, 1 - output normal and result, 2 - output normal, extended, and result, 3 - debug. 1 is default.
@@ -80,11 +80,14 @@ def hubfind():
 # the hublogin function will complete a login and leave the cookie identifier in the global superhub_cookie_header variable.
 def hublogin(hubpass=""):
 	global superhub_cookie_header # necessary so this variable can be changed from within this function
-	hublogin_cookie = web(superhub_ip_addr+"/login?arg="+superhub_key1+superhub_req_ext);
-	if hublogin_cookie[0] == "NOTOK": # if there was a socket error then return false.
-		return False;
-	hublogin_cookie = hublogin_cookie[1].split("\r\n\r\n",1)[1]; # separate the header from the page html
-	superhub_cookie_header = "Cookie: credential="+hublogin_cookie; ###### INTERACTION WITH OUTSIDE VARIABLE
+	if len(superhub_cookie_header) < 1:
+		hublogin_cookie = web(superhub_ip_addr+"/login?arg="+superhub_key1+superhub_req_ext);
+		if hublogin_cookie[0] == "NOTOK": # if there was a socket error then return false.
+			return False;
+		hublogin_cookie = hublogin_cookie[1].split("\r\n\r\n",1)[1]; # separate the header from the page html
+		superhub_cookie_header = "Cookie: credential="+hublogin_cookie; ###### INTERACTION WITH OUTSIDE VARIABLE
+	else:
+		return True;
 	return True;
 
 # validate that the login attempt was actually successful
@@ -104,7 +107,7 @@ def hubclientdata():
 		return "";
 	return clients_list_raw[1].split("\r\n\r\n",1)[1]; # return a json formatted string
 	#printx("**WARNING: SIMULATED DATA FOR TESTING!",0);
-	#return open("C:/Users/yardefaragunle/Documents/Python/TESTDATA2.txt","r").read();
+	#return open("C:/Users/yardefaragunle/Documents/Python/TESTDATA.txt","r").read();
 
 # filter and sort the client data. _prt means this function prints to the screen.
 def clientsort_prt(jsonstring):
@@ -202,6 +205,7 @@ def clientlist_prt(clientlist):
 		printx(clients,0); # print json compatible string
 
 def main():
+	global superhub_cookie_header;
 	printx("Yarde Superhub Client API (Part of the Wifi Doorbell Transponder Project) by Nicholas Elliott");
 	printx("Version "+version);
 	printx();
@@ -213,6 +217,7 @@ def main():
 		raise Exception("Could not login to superhub.");
 	printx("Validating login...");
 	if not hubsession_prt():
+		superhub_cookie_header = "";
 		raise Exception("The login could not be validated. Retrying usually fixes this random error.");
 	printx("Retrieving client data... This can take between 20 seconds up to 2 minutes.");
 	client_data = hubclientdata();
