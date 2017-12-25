@@ -1,4 +1,4 @@
-# SuperHub-ClientsAPI
+# ClientsAPI-SuperHub3
 A python script for logging in to a Virgin Media Super Hub 3 and listing clients in a json-compatible or list format.
 
 The Superhub 3 remembers clients that have previously disconnected from the router, but does not present them to the user through the main interface. This utility shows the user currently connected clients, as well as disconnected ones.
