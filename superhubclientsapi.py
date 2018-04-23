@@ -15,6 +15,7 @@ connected_devices = []; # stored in the format HOSTNAME - CONN STATUS - IP ADDRE
  # the string will look like this: http://192.168.0.1/login?arg=KEY1&_n=KEY2&_=KEY3 where KEY# is each key number.
 superhub_key1 = "";	# 1st key goes here
 superhub_key2 = "";	# 2nd key goes here
+superhub_key3 = "";	# 3rd key goes here
 superhub_req_ext = "&_n="+superhub_key2+"&_="+superhub_key3; # do not modify, this is attached to the end of each request.
 
 set_verbose_mode = 1; # verbose modes determine how much data is output. 0 - only result, 1 - output normal and result, 2 - output normal, extended, and result, 3 - debug. 1 is default.
