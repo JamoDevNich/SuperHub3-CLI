@@ -8,14 +8,13 @@ import hashlib
 version = "0.1.4";
 superhub_password = "00000000"; # unused, haven't had time to look at exactly how their login script works.
 superhub_cookie_header = ""; # do not modify. this is where the session cookie is stored. a new one is generated with each request anyway.
-superhub_ip_addr = "192.168.0.1"; # the ip addr of your superhub.
+superhub_ip_addr = "192.168.0.1"; # the ip address of your superhub.
 connected_devices = []; # stored in the format HOSTNAME - CONN STATUS - IP ADDRESS - MAC ADDRESS. DO NOT CONFUSE WITH DEVICES_CONNECTED ETC...
 
  # To get access to the keys for the superhub login system, you need to perform an ajax login and capture the data sent using your browser's developer tools.
  # the string will look like this: http://192.168.0.1/login?arg=KEY1&_n=KEY2&_=KEY3 where KEY# is each key number.
-superhub_key1 = "YWRtaW46MTUwNzg0Njk=";
-superhub_key2 = "74627";
-superhub_key3 = "1508353476324";
+superhub_key1 = "";	# 1st key goes here
+superhub_key2 = "";	# 2nd key goes here
 superhub_req_ext = "&_n="+superhub_key2+"&_="+superhub_key3; # do not modify, this is attached to the end of each request.
 
 set_verbose_mode = 1; # verbose modes determine how much data is output. 0 - only result, 1 - output normal and result, 2 - output normal, extended, and result, 3 - debug. 1 is default.
@@ -206,7 +205,7 @@ def clientlist_prt(clientlist):
 
 def main():
 	global superhub_cookie_header;
-	printx("Yarde Superhub Client API (Part of the Wifi Doorbell Transponder Project) by Nicholas Elliott");
+	printx("SuperHub 3 Client API by Nicholas Elliott");
 	printx("Version "+version);
 	printx();
 	printx("Searching for superhub ("+superhub_ip_addr+")...");
