@@ -1,25 +1,25 @@
 import re
 import socket
+import random
+import base64
 import hashlib
 
 # Yarde Superhub Client API (WiFi Doorbell Transponder) by Nicholas Elliott
 # Designed for a wifi doorbell project but can be used for other things I guess?
 
-version = "0.1.4";
-superhub_password = "00000000"; # unused, haven't had time to look at exactly how their login script works.
-superhub_cookie_header = ""; # do not modify. this is where the session cookie is stored. a new one is generated with each request anyway.
-superhub_ip_addr = "192.168.0.1"; # the ip address of your superhub.
-connected_devices = []; # stored in the format HOSTNAME - CONN STATUS - IP ADDRESS - MAC ADDRESS. DO NOT CONFUSE WITH DEVICES_CONNECTED ETC...
+version = "0.1.5";					# The version number of this utility
+version_firmware = "9.1.116";		# The firmware version this utility was tested on
+superhub_username = "admin";		# Username goes here, usually this doesn't require changing
+superhub_password = "";				# Password goes here, can be pre-filled or left blank
+superhub_cookie_header = "";		# This is where the session cookie is stored, don't modify. A new cookie is generated with each request.
+superhub_ip_addr = "192.168.0.1";	# The IP Address of your Superhub
+connected_devices = [];				# Stored in the format HOSTNAME - CONN STATUS - IP ADDRESS - MAC ADDRESS. DO NOT CONFUSE WITH DEVICES_CONNECTED ETC...
 
- # To get access to the keys for the superhub login system, you need to perform an ajax login and capture the data sent using your browser's developer tools.
- # the string will look like this: http://192.168.0.1/login?arg=KEY1&_n=KEY2&_=KEY3 where KEY# is each key number.
-superhub_key1 = "";	# 1st key goes here
-superhub_key2 = "";	# 2nd key goes here
-superhub_key3 = "";	# 3rd key goes here
-superhub_req_ext = "&_n="+superhub_key2+"&_="+superhub_key3; # do not modify, this is attached to the end of each request.
+superhub_nonce = str(random.randint(10000,99999)); # See comment below
+superhub_req_ext = "&_n="+superhub_nonce; # Superhub returns a 400 bad request error without a unique number appended to the request. this is possibly related to the session cookie.
 
 set_verbose_mode = 1; # verbose modes determine how much data is output. 0 - only result, 1 - output normal and result, 2 - output normal, extended, and result, 3 - debug. 1 is default.
-set_list_mode = 0; # list modes determine how the data is output. 0 - console inline, 1 - no output ideal when using with other scripts, 2 - json-compatible string (WARNING: PLEASE DO SUFFICENT TESTING IF INTENDING TO USE PUBLICLY WITH CGI)
+set_list_mode = 0; # list modes determine how the data is output. 0 - console inline, 1 - no output but result available within connected_devices variable, 2 - json-compatible string (WARNING: PLEASE DO SUFFICENT TESTING IF INTENDING TO USE PUBLICLY WITH CGI)
 # if console output capture is being used, please check the exit code. errors will be sent though standard output, followed by an erroneous exit code.
 
 # superhub data identifiers
@@ -81,7 +81,8 @@ def hubfind():
 def hublogin(hubpass=""):
 	global superhub_cookie_header # necessary so this variable can be changed from within this function
 	if len(superhub_cookie_header) < 1:
-		hublogin_cookie = web(superhub_ip_addr+"/login?arg="+superhub_key1+superhub_req_ext);
+		hublogin_credentials = bytes(base64.b64encode(bytes(superhub_username+":"+hubpass, "UTF-8"))).decode("utf-8");
+		hublogin_cookie = web(superhub_ip_addr+"/login?arg="+hublogin_credentials+superhub_req_ext);
 		if hublogin_cookie[0] == "NOTOK": # if there was a socket error then return false.
 			return False;
 		hublogin_cookie = hublogin_cookie[1].split("\r\n\r\n",1)[1]; # separate the header from the page html
@@ -90,14 +91,17 @@ def hublogin(hubpass=""):
 		return True;
 	return True;
 
-# validate that the login attempt was actually successful
+# validate that the login attempt was actually successful/ check hub firmware version
 def hubsession_prt():
-	session_test = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.2.2.1.1;"+superhub_req_ext,superhub_cookie_header);
+	session_test = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.5.11.0;"+superhub_req_ext,superhub_cookie_header);
 	if session_test[0] == "NOTOK": # if there was a socket error then return false.
 		return False;
 	if session_test[1][:15] != "HTTP/1.1 200 OK":
 		printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
 		return False;
+	hub_firmware_version = session_test[1].split("\r\n\r\n",1)[1].split("\n")[1].split(":",1)[1][1:][:-3];
+	if int(re.sub(r"\.", "", hub_firmware_version)) > int(re.sub(r"\.", "", version_firmware)):
+		printx("--! This has not been tested on your Superhub's firmware version");
 	return True;
 
 # get a list of clients connected to the hub and other info about them
@@ -206,27 +210,40 @@ def clientlist_prt(clientlist):
 
 def main():
 	global superhub_cookie_header;
+	global superhub_password;
+
 	printx("SuperHub 3 Client API by Nicholas Elliott");
 	printx("Version "+version);
 	printx();
+
 	printx("Searching for superhub ("+superhub_ip_addr+")...");
 	if not hubfind():
-		raise Exception("Could not find superhub. Comment out this part of the script to force find.");
+		raise Exception("Could not find Superhub, please ensure the correct IP address is set");
+
+	if len(superhub_password) < 8:
+		printx("--! Password not found", 2);
+		while len(superhub_password) < 8:
+			superhub_password = input("Please enter your Superhub's passcode: ");
+
 	printx("Logging in...");
-	if not hublogin():
+	if not hublogin(superhub_password):
 		raise Exception("Could not login to superhub.");
-	printx("Validating login...");
+
+	printx("Checking firmware version...");
 	if not hubsession_prt():
 		superhub_cookie_header = "";
-		raise Exception("The login could not be validated. Retrying usually fixes this random error.");
+		raise Exception("Couldn't check firmware version; Your password might be incorrect");
+
 	printx("Retrieving client data... This can take between 20 seconds up to 2 minutes.");
 	client_data = hubclientdata();
 	if len(client_data) < 1:
 		raise Exception("The connected clients could not be retrieved.");
+
 	printx("Sorting data, please wait...");
 	if not clientsort_prt(client_data):
 		raise Exception("An error occured while sorting the client list.");
 	printx();
+
 	clientlist_prt(connected_devices);
 
 main();
