@@ -68,7 +68,7 @@ def web(addr,customheader="Cache-Control: no-cache"):
 
 # the hubfind function is used to find the hub.
 def hubfind():
-	superhub_signature = "cf7777b19bde01785c51e0f2e6654e76"; # the md5 signature of the superhub landing page
+	superhub_signature = "fa0eeca7c861deffe89c10e40e50f761"; # the md5 signature of the superhub landing page
 	html = web(superhub_ip_addr); # make a request to the hub
 	if html[0] == "NOTOK": # if there was a socket error then return false.
 		return False;
