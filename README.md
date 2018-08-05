@@ -5,7 +5,7 @@ The Superhub 3 remembers clients that have previously disconnected from the rout
 
 ## Getting Started
 ### Requirements
-Python 3.3 and above, tested on both Windows and Linux.
+Python 3.3 and above, tested on both Windows and Linux. No third party libraries necessary.
 
 ### Authenticating
 There are several ways to authenticate with your SuperHub. The easiest way is to run the script and type your password when prompted. Alternatively, the password can be provided via the command line argument `--password`, or if you so desire, permanently edited into the script through the `superhub_password` variable.
