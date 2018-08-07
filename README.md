@@ -13,10 +13,10 @@ Python 3.3 and above, tested on both Windows and Linux. No third party libraries
 There are several ways to authenticate with your SuperHub. The easiest way is to run the script and type your password when prompted. The password can also be provided via the command line argument `--password`.
 
 ## Functions
-### Toggling Guest and Private WLAN
+### Toggling WLANs
 The Guest and Private WLANs can be toggled via the menu, or via the `--wlan` argument. Toggling the Guest WLAN will change some user-defined settings on your router, [see here](../../wiki/Functions-Documentation#wlan).
 
-### Viewing router clients
+### Viewing clients
 The router's clients can be viewed through the menu, or through the `--clients` command line option.
 
 ![Image showing router clients](https://i.imgur.com/L1low59.png)
