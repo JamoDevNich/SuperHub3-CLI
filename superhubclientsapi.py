@@ -3,13 +3,12 @@ import json
 import socket
 import random
 import base64
-import hashlib
 import argparse
 
 # Yarde Superhub Client API (WiFi Doorbell Transponder) by Nicholas Elliott
 # Designed for a wifi doorbell project but can be used for other things I guess?
 
-version = "1.0.0";					# The version number of this utility
+version = "1.0.1";					# The version number of this utility
 version_firmware = "9.1.116.60";	# The firmware version this utility was tested on
 superhub_username = "admin";		# Username goes here, usually this doesn't require changing
 superhub_password = "";				# Password goes here, can be pre-filled or left blank
@@ -106,12 +105,13 @@ def web(addr,customheader="Cache-Control: no-cache"):
 class hub:
 	# the hubfind function is used to find the hub.
 	def find():
-		html = web(superhub_ip_addr); # make a request to the hub
+		html = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.3.4.1.9.2;"+superhub_req_ext); # Request the Router Status API, as this does not require a user login to the router
 		if html[0] == "NOTOK": # if there was a socket error then return false.
 			return False;
-		html = html[1].split("\r\n\r\n",1)[1]; # separate the header from the page html
-		if hashlib.md5(html.encode("utf-8")).hexdigest() == superhub_signature: # compare the known hub landing html md5 signature with the recieved one.
+		elif json.loads(html[1].split("\r\n\r\n",1)[1])["1"] == "Finish":
 			return True;
+		else:
+			pass;
 		return False;
 
 	# the hublogin function will complete a login and leave the cookie identifier in the global superhub_cookie_header variable.
@@ -123,22 +123,26 @@ class hub:
 			if hublogin_cookie[0] == "NOTOK": # if there was a socket error then return false.
 				return False;
 			hublogin_cookie = hublogin_cookie[1].split("\r\n\r\n",1)[1]; # separate the header from the page html
-			superhub_cookie_header = "Cookie: credential="+hublogin_cookie; ###### INTERACTION WITH OUTSIDE VARIABLE
+			if len(hublogin_cookie) < 1: # If the login has failed i.e. hublogin_cookie variable is empty as hub did not return a response.
+				return False;
+			superhub_cookie_header = "Cookie: credential="+hublogin_cookie; ###### INTERACTION WITH OUTSIDE VARIABLE **NOTE: if hublogin_cookie is empty, the login failed
 		else:
 			return True;
 		return True;
 
-	# validate that the login attempt was actually successful/ check hub firmware version
+	# check hub firmware version
 	def validate():
 		session_test = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.5.11.0;"+superhub_req_ext,superhub_cookie_header);
 		if session_test[0] == "NOTOK": # if there was a socket error then return false.
 			return False;
-		if session_test[1][:15] != "HTTP/1.1 200 OK":
+		if session_test[1][:15] != "HTTP/1.1 200 OK": # Lines 138 - 140 may no longer be needed.
 			printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
 			return False;
 		hub_firmware_version = session_test[1].split("\r\n\r\n",1)[1].split("\n")[1].split(":",1)[1][1:][:-3];
 		if int(re.sub(r"\.", "", hub_firmware_version)) > int(re.sub(r"\.", "", version_firmware)):
-			printx("--! This has not been tested on your Superhub's firmware version ("+hub_firmware_version+")");
+			printx("--! This has not been tested on your SuperHub's firmware version ("+hub_firmware_version+")");
+		else:
+			printx("--i Firmware "+hub_firmware_version, 2);
 		return True;
 
 
@@ -227,15 +231,15 @@ class clients:
 def func_clients():
 	client_inst = clients();
 
-	printx("Retrieving client data... This can take between 20 seconds up to 2 minutes.");
+	printx("Retrieving clients...");
 	client_inst.fetch();
 	if client_inst.error:
-		raise Exception("The connected clients could not be retrieved.");
+		raise Exception("The clients could not be retrieved.");
 
 	printx("Sorting data, please wait...");
 	client_inst.sort();
 	if client_inst.error:
-		raise Exception("An error occured while sorting the client list.");
+		raise Exception("An error occured while sorting the clients.");
 	printx();
 
 	if set_list_mode is 2:
@@ -347,9 +351,9 @@ def main():
 	printx();
 
 	# Find the SuperHub
-	printx("Searching for superhub ("+superhub_ip_addr+")...");
+	printx("Searching for "+superhub_ip_addr+"...");
 	if not hub.find():
-		raise Exception("Could not find Superhub, please ensure the correct IP address is set");
+		raise Exception("Could not find SuperHub, please ensure the correct IP address is set");
 
 	# Check for password before asking user
 	if len(superhub_password) < 8:
@@ -358,18 +362,18 @@ def main():
 		else:
 			printx("--! Password not found", 2);
 			while len(superhub_password) < 8:
-				superhub_password = input("Please enter your Superhub's passcode: ");
+				superhub_password = input("Please enter your SuperHub's passcode: ");
 
 	# Attempt to login to SuperHub
 	printx("Logging in...");
 	if not hub.login(superhub_password):
-		raise Exception("Could not login to superhub.");
+		raise Exception("Could not login to SuperHub, password may be incorrect");
 
 	# Check firmware version
 	printx("Checking firmware version...");
 	if not hub.validate():
 		superhub_cookie_header = "";
-		raise Exception("Couldn't check firmware version; Your password might be incorrect");
+		raise Exception("Couldn't check firmware version"); # NOTE: check HTTP response from 'logging in' to check if password was bad.
 
 	# Check parameters to determine which function to execute. If no parameters provided then give user a menu
 	if args.clients is True:
@@ -377,15 +381,15 @@ def main():
 	elif args.wlan is not None:
 		func_wlan(args.wlan);
 	else:
-		printx("Which operation would you like to perform?");
-		printx("  Toggle WLAN (normal): wlan 0/1 (off/on)");
-		printx("  Toggle WLAN (guest): wlan 2/3 (off/on)")
-		printx("  List connected clients: clients");
-		printx("  Exit: q");
+		printx("");
+		printx("   wlan 0/1     Toggle Private WLAN off/on");
+		printx("   wlan 2/3     Toggle Guest WLAN off/on")
+		printx("   clients      List router clients");
+		printx("   q            Exit program");
 		printx("");
 		command = "";
 		while command not in ["wlan 0", "wlan 1", "wlan 2", "wlan 3", "clients", "q"]:
-			command = input(superhub_ip_addr+"> ");
+			command = input("Enter a command: ");
 		if command.split(" ")[0] == "wlan":
 			func_wlan(command.split(" ")[1]);
 		elif command == "clients":
