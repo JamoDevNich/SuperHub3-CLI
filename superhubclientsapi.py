@@ -8,13 +8,12 @@ import argparse
 # Yarde Superhub Client API (WiFi Doorbell Transponder) by Nicholas Elliott
 # Designed for a wifi doorbell project but can be used for other things I guess?
 
-version = "1.0.1";					# The version number of this utility
-version_firmware = "9.1.116.60";	# The firmware version this utility was tested on
+version = "1.0.2";					# The version number of this utility
+version_firmware = "9.1.116.608";	# The firmware version this utility was tested on
 superhub_username = "admin";		# Username goes here, usually this doesn't require changing
 superhub_password = "";				# Password goes here, can be pre-filled or left blank
 superhub_cookie_header = "";		# This is where the session cookie is stored, don't modify. A new cookie is generated with each request.
 superhub_ip_addr = "192.168.0.1";	# The IP Address of your Superhub
-superhub_signature = "fa0eeca7c861deffe89c10e40e50f761"; # md5 signature of the superhub landing page
 superhub_guestnet_config = {"ssid": "VM_Guest", "psk": "Ch4ngeP4ssword987Ple4se"}; # The default configuration for the guest network. Please change the default password.
 parser = argparse.ArgumentParser();	# Argument parser instance
 
@@ -32,7 +31,8 @@ parser.add_argument("-c", "--clients", help="Present client information", action
 parser.add_argument("-w", "--wlan", help="Toggle the WLAN off [0] or on [1]. Guest WLAN off [2] or on [3]. Toggles both 2.4GHz and 5GHz.", metavar="N");
 parser.add_argument("-f", "--format", help="Present output in [j]son or [c]onsole format. Work-in-progress", metavar="X");
 parser.add_argument("-v", "--verbose", help="Enable verbose mode", action="store_true");
-parser.add_argument("-s", "--silent", help="Only output result. Ensure desired operation in normal mode before invoking silent mode", action="store_true");
+parser.add_argument("-r", "--reboot", help="Reboot your SuperHub", action="store_true");
+parser.add_argument("-s", "--silent", help="Only output result. Note: Ensure desired operation in normal mode before invoking silent mode", action="store_true");
 args = parser.parse_args();
 
 #parser.add_argument("-v", "--verbosity", help="Verbosity modes: [0] Result Only [1] Normal [2] Extended [3] Debug", metavar="N");
@@ -138,13 +138,30 @@ class hub:
 		if session_test[1][:15] != "HTTP/1.1 200 OK": # Lines 138 - 140 may no longer be needed.
 			printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
 			return False;
-		hub_firmware_version = session_test[1].split("\r\n\r\n",1)[1].split("\n")[1].split(":",1)[1][1:][:-3];
+		hub_firmware_version = session_test[1].split("\r\n\r\n",1)[1].split("\n")[1].split(":",1)[1][1:][:-2];
 		if int(re.sub(r"\.", "", hub_firmware_version)) > int(re.sub(r"\.", "", version_firmware)):
 			printx("--! This has not been tested on your SuperHub's firmware version ("+hub_firmware_version+")");
 		else:
 			printx("--i Firmware "+hub_firmware_version, 2);
 		return True;
 
+	def reboot():
+		printx("Rebooting your SuperHub...");
+		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.5.15.0;"+superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.2.1.69.1.1.3.0=2;2;"+superhub_req_ext,superhub_cookie_header);
+		exit(0);
+
+	def logout():
+		global superhub_cookie_header;
+		if len(superhub_cookie_header) > 0:
+			printx("Logging out...");
+			request_logout = web(superhub_ip_addr+"/logout?"+superhub_req_ext,superhub_cookie_header);
+			if request_logout[0] == "NOTOK":
+				printx("--! Couldn't logout. Would you like to try again (Y/N)?");
+				retry = input();
+				if retry in ["Y", "y"]:
+					logout();
+			superhub_cookie_header = "";
 
 class clients:
 	clients = [];	# Stored in the format HOSTNAME - CONN STATUS - IP ADDRESS - MAC ADDRESS
@@ -235,8 +252,6 @@ def func_clients():
 	client_inst.fetch();
 	if client_inst.error:
 		raise Exception("The clients could not be retrieved.");
-
-	printx("Sorting data, please wait...");
 	client_inst.sort();
 	if client_inst.error:
 		raise Exception("An error occured while sorting the clients.");
@@ -245,14 +260,14 @@ def func_clients():
 	if set_list_mode is 2:
 		printx(json.dumps(client_inst.clients), 0); # Return JSON formatted output
 	elif set_list_mode is 0:
-		printx(" ==  CONNECTED DEVICES  == ",0); # Return Console output
+		printx(" ===  Connected Clients  === ",0); # Return Console output
 		printx("",0);
 		for item in client_inst.clients:
 			if item[1] == "1":
 				printx("("+item[2]+") ("+item[3]+") "+item[0],0);
 		printx("",0);
 		printx("",0);
-		printx(" ==  DISCONNECTED DEVICES  == ",0);
+		printx(" ===  Disconnected Clients  === ",0);
 		printx("",0);
 		for item in client_inst.clients:
 			if item[1] == "0":
@@ -279,7 +294,7 @@ def func_wlan(opt):
 	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10001=[1-Enable,2-Disable];2; (Enable/Disable Main WLAN 2.4GHz)
 	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10101=[1-Enable,2-Disable];2; (Enable/Disable Main WLAN 5GHz)
 
-	str_wlan = " WLAN 2.4GHz and 5GHz...";
+	str_wlan = " WLAN 2.4GHz and 5GHz..."; # TODO: Implement checking of WLAN name length and password strength
 	json_output = {"action": "failed"};
 
 	if opt == "0":
@@ -378,15 +393,18 @@ def main():
 	# Check parameters to determine which function to execute. If no parameters provided then give user a menu
 	if args.clients is True:
 		func_clients();
-	elif args.wlan is not None:
+	elif args.reboot is True:
+		hub.reboot();
+	elif args.wlan is not None: # not None as it takes its own parameters
 		func_wlan(args.wlan);
 	else:
-		printx("");
+		printx();
 		printx("   wlan 0/1     Toggle Private WLAN off/on");
 		printx("   wlan 2/3     Toggle Guest WLAN off/on")
 		printx("   clients      List router clients");
+		printx("   reboot       Reboot your router");
 		printx("   q            Exit program");
-		printx("");
+		printx();
 		command = "";
 		while command not in ["wlan 0", "wlan 1", "wlan 2", "wlan 3", "clients", "q"]:
 			command = input("Enter a command: ");
@@ -395,6 +413,7 @@ def main():
 		elif command == "clients":
 			func_clients();
 		else:
-			exit(0);
+			pass;
+	hub.logout();
 
 main();

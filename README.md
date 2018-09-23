@@ -1,5 +1,5 @@
 # ClientsAPI-SuperHub3
-Lists clients connected to a Virgin Media Super Hub 3 and allows toggling of WLAN/WiFi. Outputs in list or json format. 
+Lists Virgin Media Super Hub 3 clients, allows toggling of Guest/Private WLAN networks.
 
 [Read the Wiki](../../wiki)
 
@@ -17,13 +17,23 @@ There are several ways to authenticate with your SuperHub. The easiest way is to
 The Guest and Private WLANs can be toggled via the menu, or via the `--wlan` argument. Toggling the Guest WLAN will change some user-defined settings on your router, [see here](../../wiki/Functions-Documentation#wlan).
 
 ### Viewing clients
-The router's clients can be viewed through the menu, or through the `--clients` command line option.
+The router's clients can be viewed through the menu, or through the `--clients` command line argument.
 
 ![Image showing router clients](https://i.imgur.com/L1low59.png)
+
+### Rebooting the router
+You can reboot the router via the menu, or through the `--reboot` command line argument.
 
 ## Misc
 ### Output modes
 There are a variety of output modes available through command line arguments, such as json-compatible output or a verbose mode if desired, [see here](../../wiki/Command-Line-Arguments#other).
 
-### Feature suggestions
+## Feedback
+### Feature Suggestions
 Feel free to open a new issue with a feature suggestion, or fork/pull request.
+
+### Acknowledgements
+Thanks to the following:
+
+- haywirephoenix: Toggling the WLAN
+- jasonchu024: Reboot and Logout OIDs
