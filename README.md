@@ -26,7 +26,7 @@ You can reboot the router via the menu, or through the `--reboot` command line a
 
 ## Misc
 ### Output modes
-There are a variety of output modes available through command line arguments, such as json-compatible output or a verbose mode if desired, [see here](../../wiki/Command-Line-Arguments#other).
+Multiple output modes are available through command line arguments, such as a json-compatible output or verbose mode if desired, [see here](../../wiki/Command-Line-Arguments#other).
 
 ## Feedback
 ### Feature Suggestions

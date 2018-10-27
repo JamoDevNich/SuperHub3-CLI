@@ -1,3 +1,21 @@
+#!/usr/bin/python3
+
+"""
+   _____                       _    _       _        _____ _ _            _              _____ _____
+  / ____|                     | |  | |     | |      / ____| (_)          | |       /\   |  __ \_   _|
+ | (___  _   _ _ __   ___ _ __| |__| |_   _| |__   | |    | |_  ___ _ __ | |_     /  \  | |__) || |
+  \___ \| | | | '_ \ / _ \ '__|  __  | | | | '_ \  | |    | | |/ _ \ '_ \| __|   / /\ \ |  ___/ | |
+  ____) | |_| | |_) |  __/ |  | |  | | |_| | |_) | | |____| | |  __/ | | | |_   / ____ \| |    _| |_
+ |_____/ \__,_| .__/ \___|_|  |_|  |_|\__,_|_.__/   \_____|_|_|\___|_| |_|\__| /_/    \_\_|   |_____|
+              | |
+              |_|
+
+ SuperHub 3 Client API
+ Version 1.0.3
+ by Nicholas Elliott
+
+"""
+
 import re
 import json
 import socket
@@ -5,40 +23,29 @@ import random
 import base64
 import argparse
 
-# Yarde Superhub Client API (WiFi Doorbell Transponder) by Nicholas Elliott
-# Designed for a wifi doorbell project but can be used for other things I guess?
-
-version = "1.0.2";					# The version number of this utility
+version = "1.0.3";					# The version number of this utility
 version_firmware = "9.1.116.608";	# The firmware version this utility was tested on
 superhub_username = "admin";		# Username goes here, usually this doesn't require changing
 superhub_password = "";				# Password goes here, can be pre-filled or left blank
 superhub_cookie_header = "";		# This is where the session cookie is stored, don't modify. A new cookie is generated with each request.
 superhub_ip_addr = "192.168.0.1";	# The IP Address of your Superhub
-superhub_guestnet_config = {"ssid": "VM_Guest", "psk": "Ch4ngeP4ssword987Ple4se"}; # The default configuration for the guest network. Please change the default password.
 parser = argparse.ArgumentParser();	# Argument parser instance
+set_verbose_mode = 1;				# Verbose Modes: 0=Result Only, 1=Normal, 2=Extended, 3=Debug
+set_list_mode = 0;					# List Modes: 0=Normal, 1=None(Deprecated), 2=JSON-Compatible
 
-superhub_nonce = str(random.randint(10000,99999)); # See comment below
-superhub_req_ext = "&_n="+superhub_nonce; # Superhub returns a 400 bad request error without a unique number appended to the request. this is possibly related to the session cookie.
+superhub_guestnet_config = {"ssid": "VM_Guest", "psk": "Ch4ngeP4ssword987Ple4se"}; # Default guest network configuration. Please change the default password.
+superhub_nonce = str(random.randint(10000,99999)); # https://github.com/JamoDevNich/ClientsAPI-SuperHub3/wiki/OIDs-Documentation#introduction
+superhub_req_ext = "&_n="+superhub_nonce;
 
-# NOTE: The variables below can now be set via the command line options -f, -v or -s. Setting them here will not be overwritten unless a command line option is specified.
-set_verbose_mode = 1; # verbose modes determine how much data is output. 0 - only result, 1 - output normal and result, 2 - output normal, extended, and result, 3 - debug. 1 is default.
-set_list_mode = 0; # list modes determine how the data is output. 0 - console inline, 1 - no output but result available within clients.clients variable, 2 - json-compatible string (WARNING: PLEASE DO SUFFICENT TESTING IF INTENDING TO USE PUBLICLY WITH CGI)
-# if console output capture is being used, please check the exit code. errors will be sent though standard output, followed by an erroneous exit code.
-
-# Argument parser definitions
 parser.add_argument("-p", "--password", help="Provide the password for the SuperHub", metavar="N");
 parser.add_argument("-c", "--clients", help="Present client information", action="store_true");
 parser.add_argument("-w", "--wlan", help="Toggle the WLAN off [0] or on [1]. Guest WLAN off [2] or on [3]. Toggles both 2.4GHz and 5GHz.", metavar="N");
-parser.add_argument("-f", "--format", help="Present output in [j]son or [c]onsole format. Work-in-progress", metavar="X");
+parser.add_argument("-f", "--format", help="Present output in [j]son or [c]onsole format. Silent mode may be necessary.", metavar="X");
 parser.add_argument("-v", "--verbose", help="Enable verbose mode", action="store_true");
 parser.add_argument("-r", "--reboot", help="Reboot your SuperHub", action="store_true");
 parser.add_argument("-s", "--silent", help="Only output result. Note: Ensure desired operation in normal mode before invoking silent mode", action="store_true");
 args = parser.parse_args();
 
-#parser.add_argument("-v", "--verbosity", help="Verbosity modes: [0] Result Only [1] Normal [2] Extended [3] Debug", metavar="N");
-#if args.verbosity is not None: try: args.verbosity = int(args.verbosity); if args.verbosity < 4 and args.verbosity > -1: set_verbose_mode = args.verbosity; except: pass;
-
-# Check verbosity parameters
 if args.verbose is True and args.silent is True:
 	raise Exception("Creativity is that marvelous capacity to grasp mutually distinct realities and draw a spark from their juxtaposition. - Max Ernst");
 if args.verbose is True:
@@ -46,7 +53,6 @@ if args.verbose is True:
 elif args.silent is True:
 	set_verbose_mode = 0;
 
-# Check format parameters
 if args.format is not None:
 	if args.format in ["j", "json"]:
 		set_list_mode = 2;
@@ -60,14 +66,29 @@ if args.format is not None:
 # 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.14.200.1.4. IP address and device connection status
 # 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.4.200.1.4. IP address and MAC Address
 
-# SECTION: Core functions
+
+
 
 def printx(text="",verbosetype=1):
+	"""Prints text to the console
+
+	Keyword arguments:
+	text -- input text (default empty)
+	verbosetype -- verbose level at which text will print (default 1)"""
+
 	if set_verbose_mode >= verbosetype:
 		print(text);
 
-# the web function is in charge of tcp requests.
+
+
+
 def web(addr,customheader="Cache-Control: no-cache"):
+	"""Performs a web request and returns result in an array
+
+	Keyword arguments:
+	addr -- the address to query
+	customheader -- custom header to send (default no-cache)"""
+
 	status = "418";
 	svr_furl = addr.split("/",1);
 	svr_host = svr_furl[0];
@@ -102,81 +123,32 @@ def web(addr,customheader="Cache-Control: no-cache"):
 	return [status,response];
 
 
-class hub:
-	# the hubfind function is used to find the hub.
-	def find():
-		html = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.3.4.1.9.2;"+superhub_req_ext); # Request the Router Status API, as this does not require a user login to the router
-		if html[0] == "NOTOK": # if there was a socket error then return false.
-			return False;
-		elif json.loads(html[1].split("\r\n\r\n",1)[1])["1"] == "Finish":
-			return True;
-		else:
-			pass;
-		return False;
 
-	# the hublogin function will complete a login and leave the cookie identifier in the global superhub_cookie_header variable.
-	def login(hubpass=""):
-		global superhub_cookie_header # necessary so this variable can be changed from within this function
-		if len(superhub_cookie_header) < 1:
-			hublogin_credentials = bytes(base64.b64encode(bytes(superhub_username+":"+hubpass, "UTF-8"))).decode("utf-8");
-			hublogin_cookie = web(superhub_ip_addr+"/login?arg="+hublogin_credentials+superhub_req_ext);
-			if hublogin_cookie[0] == "NOTOK": # if there was a socket error then return false.
-				return False;
-			hublogin_cookie = hublogin_cookie[1].split("\r\n\r\n",1)[1]; # separate the header from the page html
-			if len(hublogin_cookie) < 1: # If the login has failed i.e. hublogin_cookie variable is empty as hub did not return a response.
-				return False;
-			superhub_cookie_header = "Cookie: credential="+hublogin_cookie; ###### INTERACTION WITH OUTSIDE VARIABLE **NOTE: if hublogin_cookie is empty, the login failed
-		else:
-			return True;
-		return True;
 
-	# check hub firmware version
-	def validate():
-		session_test = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.5.11.0;"+superhub_req_ext,superhub_cookie_header);
-		if session_test[0] == "NOTOK": # if there was a socket error then return false.
-			return False;
-		if session_test[1][:15] != "HTTP/1.1 200 OK": # Lines 138 - 140 may no longer be needed.
-			printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
-			return False;
-		hub_firmware_version = session_test[1].split("\r\n\r\n",1)[1].split("\n")[1].split(":",1)[1][1:][:-2];
-		if int(re.sub(r"\.", "", hub_firmware_version)) > int(re.sub(r"\.", "", version_firmware)):
-			printx("--! This has not been tested on your SuperHub's firmware version ("+hub_firmware_version+")");
-		else:
-			printx("--i Firmware "+hub_firmware_version, 2);
-		return True;
+class Clients:
+	""" Manages the retrieval and processing of SuperHub clients """
 
-	def reboot():
-		printx("Rebooting your SuperHub...");
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.5.15.0;"+superhub_req_ext,superhub_cookie_header);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.2.1.69.1.1.3.0=2;2;"+superhub_req_ext,superhub_cookie_header);
-		exit(0);
+	def __init__(self):
+		""" Constructor """
 
-	def logout():
-		global superhub_cookie_header;
-		if len(superhub_cookie_header) > 0:
-			printx("Logging out...");
-			request_logout = web(superhub_ip_addr+"/logout?"+superhub_req_ext,superhub_cookie_header);
-			if request_logout[0] == "NOTOK":
-				printx("--! Couldn't logout. Would you like to try again (Y/N)?");
-				retry = input();
-				if retry in ["Y", "y"]:
-					logout();
-			superhub_cookie_header = "";
+		self.clients = []; # Stored in the format HOSTNAME - CONN STATUS - IP ADDRESS - MAC ADDRESS
+		self.__raw = "";
+		self.error = False;
 
-class clients:
-	clients = [];	# Stored in the format HOSTNAME - CONN STATUS - IP ADDRESS - MAC ADDRESS
-	__raw = "";
-	error = False;
 
 	def fetch(self):
+		""" Fetches SuperHub clients """
+
 		clients_list_raw = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.2.4.2;"+superhub_req_ext,superhub_cookie_header);
 		if clients_list_raw[0] == "NOTOK": # if there was a socket error then return false.
 			self.error = True;
 		else:
 			self.__raw = clients_list_raw[1].split("\r\n\r\n",1)[1]; # return a json formatted string
 
-	# filter and sort the client data. _prt means this function prints to the screen.
+
 	def sort(self):
+		""" Parses and organises the retrieved list of clients """
+
 		id_ipaddr_hostname = "1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.3.200.1.4."; # the prefix for ip address + hostnames
 		id_ipaddr_connstat = "1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.14.200.1.4."; # the prefix for ip address + connection status
 		id_ipaddr_macaddrs = "1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.4.200.1.4."; # the prefix for ip address + mac address
@@ -193,10 +165,10 @@ class clients:
 		self.__raw = re.sub(r"{|}|\"", "", self.__raw); # strip the separators from the data
 		self.__raw = re.sub(r"\n", "", self.__raw); # strip the newline chars. apparently re.sub isn't recommended for this?
 		self.__raw = re.sub(r"\r\n", "", self.__raw); # strip the windows-style cr lf
-		self.__raw = re.sub(r",1:Finish", "", self.__raw); # get rid of this rubbish at the end of the json string
+		self.__raw = re.sub(r",1:Finish", "", self.__raw);
 		client_data = self.__raw.split(",");
 
-		# put the ip addresses and hostnames into their relevant list
+		""" Place IP addresses and hostnames into a list """
 		for item in client_data:
 			if item[:len(id_ipaddr_hostname)] == id_ipaddr_hostname:
 				temp_storage.append(item);
@@ -206,7 +178,7 @@ class clients:
 		printx("--> "+str(len(temp_storage))+" devices identified",2);
 		temp_storage = [];
 
-		# put the ip addresses and mac addresses into their relevant list
+		""" Place IP addresses and MAC addresses into a list """
 		for item in client_data:
 			if item[:len(id_ipaddr_macaddrs)] == id_ipaddr_macaddrs:
 				temp_storage.append(item);
@@ -220,7 +192,7 @@ class clients:
 		printx("--> "+str(len(temp_storage))+" mac addresses identified",2);
 		temp_storage = [];
 
-		# put the ip addresses and connection status into their relevant list
+		""" Place IP addresses and connection status into a list """
 		for item in client_data:
 			if item[:len(id_ipaddr_connstat)] == id_ipaddr_connstat:
 				temp_storage.append(item);
@@ -230,72 +202,295 @@ class clients:
 		printx("--> "+str(len(temp_storage))+" devices validated",2);
 		temp_storage = [];
 
-		# merge data into the self.clients list
+		""" Merge clients into the self.clients list """
 		for item in devices_all:
 			for connstatus in devices_connected:
 				for macaddrlist in devices_macaddrs:
 					if item[0] == connstatus[0] and item[0] == macaddrlist[0]:
-						self.clients.append([item[1],connstatus[1],item[0],macaddrlist[1]]); ####### INTERACTION WITH OUTSIDE VARIABLE
+						self.clients.append([item[1],connstatus[1],item[0],macaddrlist[1]]);
 		printx("--> Matched devices: "+str(len(self.clients))+"/"+str(len(devices_all)),2);
-
-		# show how many of the devices are connected out of the detected devices
 		for item in self.clients:
 			if item[1] == "1":
 				devices_connected_count += 1;
 		printx("--> Connected devices: "+str(devices_connected_count)+"/"+str(len(self.clients)),2);
 
 
-def func_clients():
-	client_inst = clients();
 
-	printx("Retrieving clients...");
-	client_inst.fetch();
-	if client_inst.error:
-		raise Exception("The clients could not be retrieved.");
-	client_inst.sort();
-	if client_inst.error:
-		raise Exception("An error occured while sorting the clients.");
-	printx();
 
-	if set_list_mode is 2:
-		printx(json.dumps(client_inst.clients), 0); # Return JSON formatted output
-	elif set_list_mode is 0:
-		printx(" ===  Connected Clients  === ",0); # Return Console output
-		printx("",0);
-		for item in client_inst.clients:
-			if item[1] == "1":
-				printx("("+item[2]+") ("+item[3]+") "+item[0],0);
-		printx("",0);
-		printx("",0);
-		printx(" ===  Disconnected Clients  === ",0);
-		printx("",0);
-		for item in client_inst.clients:
-			if item[1] == "0":
-				printx("("+item[2]+") ("+item[3]+") "+item[0],0);
-	else:
-		pass; # Return no output
+class WLAN:
+	""" Static methods which control the state of the WLAN """
 
+	class Messages:
+		""" Messages for the various states and notifications """
+
+		json_output = {"action": "failed"};
+		enable = 	"Enabling ";
+		disable =	"Disabling ";
+		guest =		"Guest ";
+		radios =	"WLAN 2.4GHz and 5GHz...";
+		radio_off =	"--i Shutting down radios...";
+		radio_on =	"--i Powering on radios...";
+		timers =	"--i Clearing timers...";
+		ssid =		"--i Applying SSIDs...";
+		security =	"--i Setting security modes...";
+		algorithm =	"--i Configuring WPA algorithm...";
+		password =	"--i Configuring password...";
+		parental =	"--i Applying restrictions to Guest VWLAN...";
+		applying =	"Router is processing changes...";
+		success =	"Changes applied successfully!";
+
+
+	class ErrorMessages:
+		""" Messages for the various critical errors which may occur """
+
+		specify_parameter = "--! Please specify 0/1, 2/3 with the wlan parameter.";
+		changes_failed =	"--! Changes could not be applied - possibly due to TCP socket error";
+
+
+	class Oids:
+		""" Index of the OIDs used by the WLAN class """
+
+		prefix = "/snmpSet?oid=";
+		radio_2400_main = 		"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10001";
+		radio_5000_main = 		"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10101";
+		radio_2400_guest =		"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10004";
+		radio_5000_guest =		"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10104";
+		parental_guest =		"1.3.6.1.4.1.4115.1.20.1.1.2.2.1.39.203";
+		timer_2400_guest =		"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.14.10004";
+		timer_5000_guest =		"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.14.10104";
+		ssid_2400_guest =		"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.2.10004";
+		ssid_5000_guest =		"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.2.10104";
+		security_2400_guest =	"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.5.10004";
+		security_5000_guest =	"1.3.6.1.4.1.4115.1.20.1.1.3.22.1.5.10104";
+		algorithm_2400_guest =	"1.3.6.1.4.1.4115.1.20.1.1.3.26.1.1.10004";
+		algorithm_5000_guest =	"1.3.6.1.4.1.4115.1.20.1.1.3.26.1.1.10104";
+		psk_2400_guest =		"1.3.6.1.4.1.4115.1.20.1.1.3.26.1.2.10004";
+		psk_5000_guest =		"1.3.6.1.4.1.4115.1.20.1.1.3.26.1.2.10104";
+		apply_changes =			"1.3.6.1.4.1.4115.1.20.1.1.9.0";
+
+
+	class Control:
+		""" Index of the various OID parameters used """
+
+		radio_disable =		"=2;2;";
+		radio_enable =		"=1;2;";
+		parental_disable =	"=2;2"; # Disable parental controls - NOT VERIFIED
+		parental_enable =	"=1;2;";
+		timer_default =		"=;4;"; # Research Needed
+		security_default =	"=3;2;"; # Research Needed
+		algorithm_wpa =		"=2;2;";
+		ssid_set_guest =	"="+superhub_guestnet_config["ssid"]+";4;";
+		psk_set_guest =		"="+superhub_guestnet_config["psk"]+";4;";
+		confirm =			"=1;2;";
+
+
+	@classmethod
+	def radios_disable(cls,radio_2400_name,radio_5000_name):
+		""" Manages the disabling of the WLAN radios """
+
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			radio_2400_name +
+			cls.Control.radio_disable +
+			superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			radio_5000_name +
+			cls.Control.radio_disable +
+			superhub_req_ext,superhub_cookie_header);
+
+
+	@classmethod
+	def radios_enable(cls,radio_2400_name,radio_5000_name):
+		""" Manages the enabling of the WLAN radios """
+
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			radio_2400_name +
+			cls.Control.radio_enable +
+			superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			radio_5000_name +
+			cls.Control.radio_enable +
+			superhub_req_ext,superhub_cookie_header);
+
+
+	@classmethod
+	def guest_disable(cls):
+		""" Disables the Guest WLAN """
+
+		printx(cls.Messages.radio_off, 2);
+		cls.radios_disable(cls.Oids.radio_2400_guest,cls.Oids.radio_5000_guest);
+
+		printx(cls.Messages.timers, 2);
+		cls.timer_reset();
+
+
+	@classmethod
+	def guest_enable(cls):
+		""" Enables the Guest WLAN """
+
+		printx(cls.Messages.radio_on, 2);
+		cls.radios_enable(cls.Oids.radio_2400_guest,cls.Oids.radio_5000_guest);
+
+		printx(cls.Messages.timers, 2);
+		cls.timer_reset();
+
+		printx(cls.Messages.ssid, 2);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.ssid_2400_guest +
+			cls.Control.ssid_set_guest +
+			superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.ssid_5000_guest +
+			cls.Control.ssid_set_guest +
+			superhub_req_ext,superhub_cookie_header);
+
+		printx(cls.Messages.security, 2);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.security_2400_guest +
+			cls.Control.security_default +
+			superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.security_5000_guest +
+			cls.Control.security_default +
+			superhub_req_ext,superhub_cookie_header);
+
+		printx(cls.Messages.algorithm, 2);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.algorithm_2400_guest +
+			cls.Control.algorithm_wpa +
+			superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.algorithm_5000_guest +
+			cls.Control.algorithm_wpa +
+			superhub_req_ext,superhub_cookie_header);
+
+		printx(cls.Messages.password, 2);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.psk_2400_guest +
+			cls.Control.psk_set_guest +
+			superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.psk_5000_guest +
+			cls.Control.psk_set_guest +
+			superhub_req_ext,superhub_cookie_header);
+
+		printx(cls.Messages.parental, 2);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.parental_guest +
+			cls.Control.parental_enable +
+			superhub_req_ext,superhub_cookie_header);
+
+		printx("Guest network name: "+superhub_guestnet_config["ssid"]); # TODO: MOVE THESE
+		printx("Guest network password: "+superhub_guestnet_config["psk"]);
+		cls.Messages.json_output.update(superhub_guestnet_config);
+
+
+	@classmethod
+	def timer_reset(cls):
+		""" Resets the WLAN power-on timer """
+
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.timer_2400_guest +
+			cls.Control.timer_default +
+			superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr +
+			cls.Oids.prefix +
+			cls.Oids.timer_5000_guest +
+			cls.Control.timer_default +
+			superhub_req_ext,superhub_cookie_header);
+
+
+	@classmethod
+	def apply_changes(cls):
+		""" Applies the WLAN changes requested to the router """
+
+		response_raw = web(superhub_ip_addr +
+						cls.Oids.prefix +
+						cls.Oids.apply_changes +
+						cls.Control.confirm +
+						superhub_req_ext,superhub_cookie_header);
+		if response_raw[0] == "NOTOK":
+			return False;
+		else:
+			response = json.loads(response_raw[1].split("\r\n\r\n",1)[1]);
+			if response[cls.Oids.apply_changes] == "1":
+				return True;
+
+
+	@classmethod
+	def operate(cls, function_id):
+		""" Handles the enabling and disabling of the WLANs
+
+			Keyword arguments:
+			function_id -- wlan configuration to apply
+				0 - Disable WLAN
+				1 - Enable WLAN
+				2 - Disable Guest WLAN
+				3 - Enable Guest WLAN"""
+
+		if function_id == "0":
+			""" Disable WLAN """
+
+			printx(cls.Messages.disable+cls.Messages.radios);
+			cls.radios_disable(cls.Oids.radio_2400_main,cls.Oids.radio_5000_main);
+
+		elif function_id == "1":
+			""" Enable WLAN """
+
+			printx(cls.Messages.enable+cls.Messages.radios);
+			cls.radios_enable(cls.Oids.radio_2400_main,cls.Oids.radio_5000_main);
+
+		elif function_id == "2":
+			""" Disable Guest WLAN """
+
+			printx(cls.Messages.disable+cls.Messages.guest+cls.Messages.radios);
+			cls.guest_disable();
+
+		elif function_id == "3":
+			""" Enable Guest WLAN """
+
+			printx(cls.Messages.enable+cls.Messages.guest+cls.Messages.radios);
+			cls.guest_enable();
+
+		else:
+			""" Parameter not recognised """
+			printx(cls.ErrorMessages.specify_parameter);
+			return None;
+
+		printx(cls.Messages.applying);
+		if cls.apply_changes():
+			cls.Messages.json_output["action"] = "success";
+			if set_list_mode == 2:
+				printx(json.dumps(cls.Messages.json_output),0);
+			else:
+				printx(cls.Messages.success,0);
+		else:
+			if set_list_mode == 2:
+				printx(json.dumps(cls.Messages.json_output),0);
+			else:
+				printx(cls.ErrorMessages.changes_failed);
+
+
+
+
+"""
 def func_wlan(opt):
-	# OID Definitions. This in correct execution order.
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10004=[1-Enable,2-Disable];2; (Enable/Disable Guest Network 2.4GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10104=[1-Enable,2-Disable];2; (Enable/Disable Guest Network 5GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.14.10004=;4; (Research needed) (Set Timer for Guest Network 2.4GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.14.10104=;4; (Research needed) (Set Timer for Guest Network 5GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.2.10004=[Encrypted/Plaintext SSID];4; (Set Encrypted/Plaintext SSID for Guest 2.4GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.2.10104=[Encrypted/Plaintext SSID];4; (Set Encrypted/Plaintext SSID for Guest 5GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.5.10004=3;2; (Set Security Mode for Guest 2.4GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.5.10104=3;2; (Set Security Mode for Guest 5GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.26.1.1.10004=2;2; (Set WPA Algorithm for Guest 2.4GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.26.1.1.10104=2;2; (Set WPA Algorithm for Guest 5GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.26.1.2.10004=[Alphanumeric password with both capital and lowercase letters];4; (Set/Get PSK Guest 2.4GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.26.1.2.10104=[Alphanumeric password with both capital and lowercase letters];4; (Set/Get PSK Guest 5GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.2.2.1.39.203=1;2; (Research Needed) (Enable Parental Controls for Guest LAN)
-	#
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10001=[1-Enable,2-Disable];2; (Enable/Disable Main WLAN 2.4GHz)
-	# 1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10101=[1-Enable,2-Disable];2; (Enable/Disable Main WLAN 5GHz)
 
 	str_wlan = " WLAN 2.4GHz and 5GHz..."; # TODO: Implement checking of WLAN name length and password strength
-	json_output = {"action": "failed"};
+	cls.Messages.json_output = {"action": "failed"};
 
 	if opt == "0":
 		printx("Disabling"+str_wlan);
@@ -336,7 +531,7 @@ def func_wlan(opt):
 		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.2.2.1.39.203=1;2;"+superhub_req_ext,superhub_cookie_header); # Apply parental controls? The web interface does this...
 		printx("Guest network name: "+superhub_guestnet_config["ssid"]);
 		printx("Guest network password: "+superhub_guestnet_config["psk"]);
-		json_output.update(superhub_guestnet_config);
+		cls.Messages.json_output.update(superhub_guestnet_config);
 	else:
 		raise Exception("WLAN parameter not understood, see help -h");
 
@@ -348,72 +543,238 @@ def func_wlan(opt):
 	else:
 		response = json.loads(response_raw[1].split("\r\n\r\n",1)[1]);
 		if response["1.3.6.1.4.1.4115.1.20.1.1.9.0"] == "1":
-			json_output["action"] = "success";
+			cls.Messages.json_output["action"] = "success";
 
 		# Return output to the user
 		if set_list_mode == 2:
-			printx(json.dumps(json_output),0);
+			printx(json.dumps(cls.Messages.json_output),0);
 		else:
-			printx("Operation "+json_output["action"]+".",0);
+			printx("Operation "+cls.Messages.json_output["action"]+".",0);
+"""
 
-# Main Procedure
-def main():
-	global superhub_cookie_header;
-	global superhub_password;
 
-	printx("SuperHub 3 Client API by Nicholas Elliott");
-	printx("Version "+version);
-	printx();
 
-	# Find the SuperHub
-	printx("Searching for "+superhub_ip_addr+"...");
-	if not hub.find():
-		raise Exception("Could not find SuperHub, please ensure the correct IP address is set");
 
-	# Check for password before asking user
-	if len(superhub_password) < 8:
-		if (args.password is not None) and len(args.password) > 7:
-			superhub_password = args.password;
+class Hub:
+	""" Static methods which administer the hub """
+
+	class Messages:
+		""" Index of various status messages """
+
+		author =			"SuperHub 3 Client API by Nicholas Elliott";
+		version =			"Version "+version;
+		searching =			"Searching for "+superhub_ip_addr+"...";
+		logging_in =		"Logging in...";
+		no_password =		"--! Password not found";
+		enter_password =	"Please enter your SuperHub's passcode: ";
+		firmware_check =	"Checking firmware version...";
+
+
+	class ErrorMessages:
+		""" Index of various exception error messages """
+
+		not_found =			"Could not find SuperHub, please ensure the correct IP address is set";
+		login_failed =		"Could not login to SuperHub, password may be incorrect";
+		firmware_warn =		"Couldn't check firmware version";
+
+
+	@staticmethod
+	def login(hubpass=""):
+		"""Authenticates with the hub using a given password, returns Boolean
+
+		Keyword arguments:
+		hubpass -- SuperHub password (default empty)"""
+
+		global superhub_cookie_header # necessary so this variable can be changed from within this function
+		if len(superhub_cookie_header) < 1:
+			hublogin_credentials = bytes(base64.b64encode(bytes(superhub_username+":"+hubpass, "UTF-8"))).decode("utf-8");
+			hublogin_cookie = web(superhub_ip_addr+"/login?arg="+hublogin_credentials+superhub_req_ext);
+			if hublogin_cookie[0] == "NOTOK": # if there was a socket error then return false.
+				return False;
+			hublogin_cookie = hublogin_cookie[1].split("\r\n\r\n",1)[1]; # separate the header from the page html
+			if len(hublogin_cookie) < 1: # If the login has failed i.e. hublogin_cookie variable is empty as hub did not return a response.
+				return False;
+			superhub_cookie_header = "Cookie: credential="+hublogin_cookie; ###### INTERACTION WITH OUTSIDE VARIABLE **NOTE: if hublogin_cookie is empty, the login failed
 		else:
-			printx("--! Password not found", 2);
-			while len(superhub_password) < 8:
-				superhub_password = input("Please enter your SuperHub's passcode: ");
+			return True;
+		return True;
 
-	# Attempt to login to SuperHub
-	printx("Logging in...");
-	if not hub.login(superhub_password):
-		raise Exception("Could not login to SuperHub, password may be incorrect");
 
-	# Check firmware version
-	printx("Checking firmware version...");
-	if not hub.validate():
-		superhub_cookie_header = "";
-		raise Exception("Couldn't check firmware version"); # NOTE: check HTTP response from 'logging in' to check if password was bad.
+	@staticmethod
+	def logout():
+		""" Handles logging out of the hub """
 
-	# Check parameters to determine which function to execute. If no parameters provided then give user a menu
-	if args.clients is True:
-		func_clients();
-	elif args.reboot is True:
-		hub.reboot();
-	elif args.wlan is not None: # not None as it takes its own parameters
-		func_wlan(args.wlan);
-	else:
-		printx();
-		printx("   wlan 0/1     Toggle Private WLAN off/on");
-		printx("   wlan 2/3     Toggle Guest WLAN off/on")
-		printx("   clients      List router clients");
-		printx("   reboot       Reboot your router");
-		printx("   q            Exit program");
-		printx();
-		command = "";
-		while command not in ["wlan 0", "wlan 1", "wlan 2", "wlan 3", "clients", "q"]:
-			command = input("Enter a command: ");
-		if command.split(" ")[0] == "wlan":
-			func_wlan(command.split(" ")[1]);
-		elif command == "clients":
-			func_clients();
+		global superhub_cookie_header;
+		if len(superhub_cookie_header) > 0:
+			printx("Logging out...");
+			request_logout = web(superhub_ip_addr+"/logout?"+superhub_req_ext,superhub_cookie_header);
+			if request_logout[0] == "NOTOK":
+				printx("--! Couldn't logout. Would you like to try again (Y/N)?");
+				retry = input();
+				if retry in ["Y", "y"]:
+					logout();
+			superhub_cookie_header = "";
+
+
+	@staticmethod
+	def find():
+		""" Locates the hub at the IP address specified in superhub_ip_addr """
+
+		html = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.3.4.1.9.2;"+superhub_req_ext); # Request the Router Status API, as this does not require a user login to the router
+		if html[0] == "NOTOK": # if there was a socket error then return false.
+			return False;
+		elif json.loads(html[1].split("\r\n\r\n",1)[1])["1"] == "Finish":
+			return True;
 		else:
 			pass;
-	hub.logout();
+		return False;
 
-main();
+
+	@staticmethod
+	def check_firmware():
+		""" Reports whether this script is compatible with the hub firmware """
+
+		session_test = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.5.11.0;"+superhub_req_ext,superhub_cookie_header);
+		if session_test[0] == "NOTOK": # if there was a socket error then return false.
+			return False;
+		if session_test[1][:15] != "HTTP/1.1 200 OK":
+			printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
+			return False;
+		hub_firmware_version = session_test[1].split("\r\n\r\n",1)[1].split("\n")[1].split(":",1)[1][1:][:-2];
+		if int(re.sub(r"\.", "", hub_firmware_version)) > int(re.sub(r"\.", "", version_firmware)):
+			printx("--! This has not been tested on your SuperHub's firmware version ("+hub_firmware_version+")");
+		else:
+			printx("--i Firmware "+hub_firmware_version, 2);
+		return True;
+
+
+	@staticmethod
+	def reboot():
+		""" Reboots the hub """
+
+		printx("Rebooting your SuperHub...");
+		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.5.15.0;"+superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.2.1.69.1.1.3.0=2;2;"+superhub_req_ext,superhub_cookie_header);
+		exit(0);
+
+
+	@staticmethod
+	def get_clients():
+		""" Returns the clients currently connected to the hub, requires Clients class """
+
+		client_inst = Clients();
+
+		printx("Retrieving clients...");
+		client_inst.fetch();
+		if client_inst.error:
+			raise Exception("The clients could not be retrieved.");
+		client_inst.sort();
+		if client_inst.error:
+			raise Exception("An error occured while sorting the clients.");
+		printx();
+
+		if set_list_mode is 2:
+			printx(json.dumps(client_inst.clients), 0);
+		elif set_list_mode is 0:
+			printx(" ===  Connected Clients  === ",0);
+			printx("",0);
+			for item in client_inst.clients:
+				if item[1] == "1":
+					printx("("+item[2]+") ("+item[3]+") "+item[0],0);
+			printx("",0);
+			printx("",0);
+			printx(" ===  Disconnected Clients  === ",0);
+			printx("",0);
+			for item in client_inst.clients:
+				if item[1] == "0":
+					printx("("+item[2]+") ("+item[3]+") "+item[0],0);
+		else:
+			pass;
+
+
+	@staticmethod
+	def wlan(arg):
+		""" Wrapper for the WLAN.operate method, requires WLAN class """
+
+		WLAN.operate(arg);
+
+
+
+
+class Main:
+	""" Core script methods """
+
+	@staticmethod
+	def menu():
+		""" Main menu for console interface """
+
+		menu_in_loop = True;
+		while menu_in_loop:
+			printx();
+			printx("   wlan 0/1     Toggle Private WLAN off/on");
+			printx("   wlan 2/3     Toggle Guest WLAN off/on")
+			printx("   clients      List router clients");
+			printx("   reboot       Reboot your router");
+			printx("   q            Exit program");
+			printx();
+			command = "";
+			while command.split(" ")[0] not in ["wlan", "clients", "reboot", "q"]:
+				command = input("Enter a command: ");
+				if command.split(" ")[0] == "wlan":
+					if len(command.split(" ")) > 1:
+						Hub.wlan(command.split(" ")[1]);
+					else:
+						printx(WLAN.ErrorMessages.specify_parameter);
+				elif command == "clients":
+					Hub.get_clients();
+				elif command == "reboot":
+					Hub.reboot();
+					menu_in_loop = False;
+				elif command == "q":
+					menu_in_loop = False;
+				else:
+					pass;
+
+
+	@staticmethod
+	def app():
+		""" Entry point """
+
+		global superhub_cookie_header;
+		global superhub_password;
+
+		printx(Hub.Messages.author, 2);
+		printx(Hub.Messages.version, 2);
+		printx("",2);
+
+		printx(Hub.Messages.searching);
+		if not Hub.find():
+			raise Exception(Hub.ErrorMessages.not_found);
+
+		if len(superhub_password) < 8:
+			if (args.password is not None) and len(args.password) > 7:
+				superhub_password = args.password;
+			else:
+				printx(Hub.Messages.no_password, 2);
+				while len(superhub_password) < 8:
+					superhub_password = input(Hub.Messages.enter_password);
+
+		printx(Hub.Messages.logging_in);
+		if not Hub.login(superhub_password):
+			raise Exception(Hub.ErrorMessages.login_failed);
+
+		printx(Hub.Messages.firmware_check);
+		if not Hub.check_firmware():
+			raise Exception(Hub.ErrorMessages.firmware_warn);
+
+		if args.clients is True:
+			Hub.get_clients();
+		elif args.reboot is True:
+			Hub.reboot();
+		elif args.wlan is not None: # not None as it takes its own parameters
+			Hub.wlan(args.wlan);
+		else:
+			Main.menu();
+		Hub.logout();
+
+Main.app();
