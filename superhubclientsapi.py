@@ -11,27 +11,28 @@
               |_|
 
  SuperHub 3 Client API
- Version 1.0.3
+ Version 1.0.4
  by Nicholas Elliott
 
 """
 
 import re
+import sys
 import json
 import socket
 import random
 import base64
 import argparse
 
-version = "1.0.3";					# The version number of this utility
-version_firmware = "9.1.116.608";	# The firmware version this utility was tested on
-superhub_username = "admin";		# Username goes here, usually this doesn't require changing
-superhub_password = "";				# Password goes here, can be pre-filled or left blank
-superhub_cookie_header = "";		# This is where the session cookie is stored, don't modify. A new cookie is generated with each request.
-superhub_ip_addr = "192.168.0.1";	# The IP Address of your Superhub
-parser = argparse.ArgumentParser();	# Argument parser instance
-set_verbose_mode = 1;				# Verbose Modes: 0=Result Only, 1=Normal, 2=Extended, 3=Debug
-set_list_mode = 0;					# List Modes: 0=Normal, 1=None(Deprecated), 2=JSON-Compatible
+version = "1.0.4";                  # The version number of this utility
+version_firmware = "9.1.116.608";   # The firmware version this utility was tested on
+superhub_username = "admin";        # Username goes here, usually this doesn't require changing
+superhub_password = "";             # Password goes here, can be pre-filled or left blank
+superhub_cookie_header = "";        # This is where the session cookie is stored, don't modify. A new cookie is generated with each request.
+superhub_ip_addr = "192.168.0.1";   # The IP Address of your Superhub
+parser = argparse.ArgumentParser(); # Argument parser instance
+set_verbose_mode = 1;               # Verbose Modes: 0=Result Only, 1=Normal, 2=Extended, 3=Debug
+set_list_mode = 0;                  # List Modes: 0=Normal, 1=None(Deprecated), 2=JSON-Compatible
 
 superhub_guestnet_config = {"ssid": "VM_Guest", "psk": "Ch4ngeP4ssword987Ple4se"}; # Default guest network configuration. Please change the default password.
 superhub_nonce = str(random.randint(10000,99999)); # https://github.com/JamoDevNich/ClientsAPI-SuperHub3/wiki/OIDs-Documentation#introduction
@@ -61,11 +62,6 @@ if args.format is not None:
 	else:
 		raise Exception("Output format is not valid, see help -h");
 
-# superhub data identifiers
-# 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.3.200.1.4. IP address and hostname prefix
-# 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.14.200.1.4. IP address and device connection status
-# 1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.4.200.1.4. IP address and MAC Address
-
 
 
 
@@ -94,32 +90,32 @@ def web(addr,customheader="Cache-Control: no-cache"):
 	svr_host = svr_furl[0];
 	svr_ureq = "";
 	svr_addr = socket.gethostbyname(svr_host);
+	response = "";
 
 	if len(svr_furl) > 1:
-		svr_ureq = svr_furl[1]; # if a uri path is there then put it in the GET request
+		svr_ureq = svr_furl[1]; # If a full URI path is available then append it to the GET request
 
 	request_headers_array = ["GET /"+svr_ureq+" HTTP/1.1", "Host: "+svr_host, "Accept: text/html", "User-Agent: python-3.3", "Connection: close", customheader,];
-	request_headers_string = ""; # do not alter pls this gets overwritten
+	request_headers_string = "";
 
 	for header in request_headers_array:
 		request_headers_string = request_headers_string + header + "\r\n";
-	request_headers_string = request_headers_string + "\r\n"; # this line is in the right place, do not tab it. thx. this ends the header, lighttpd doesn't respond without double carriage return and newline
-	printx(request_headers_string,3); # debugging stuff
+	request_headers_string = request_headers_string + "\r\n";
+	printx(request_headers_string,3);
 	try:
 		socket_instance = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
 		socket_instance.connect((svr_addr,80));
 		socket_instance.send(request_headers_string.encode());
 		responsebuffer = socket_instance.recv(1024);
-		response = "";
 		while (len(responsebuffer) > 0):
 			response += responsebuffer.decode("utf-8");
-			responsebuffer = socket_instance.recv(1024); # buffer size in bytes
+			responsebuffer = socket_instance.recv(1024);
 		socket_instance.close();
 		status = "OK"
 	except:
 		status = "NOTOK"
 		printx("--> Socket error, please check connection settings.",2);
-	printx(response,3); # debugging stuff
+	printx(response,3);
 	return [status,response];
 
 
@@ -486,96 +482,41 @@ class WLAN:
 
 
 
-"""
-def func_wlan(opt):
-
-	str_wlan = " WLAN 2.4GHz and 5GHz..."; # TODO: Implement checking of WLAN name length and password strength
-	cls.Messages.json_output = {"action": "failed"};
-
-	if opt == "0":
-		printx("Disabling"+str_wlan);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10001=2;2;"+superhub_req_ext,superhub_cookie_header); # Shut down 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10101=2;2;"+superhub_req_ext,superhub_cookie_header); # Shut down 5GHz
-	elif opt == "1":
-		printx("Enabling"+str_wlan);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10001=1;2;"+superhub_req_ext,superhub_cookie_header); # Enable 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10101=1;2;"+superhub_req_ext,superhub_cookie_header); # Enable 5GHz
-	elif opt == "2":
-		printx("Disabling Guest"+str_wlan);
-		printx("--i Shutting down radios...", 2);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10004=2;2;"+superhub_req_ext,superhub_cookie_header); # Shut down 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10104=2;2;"+superhub_req_ext,superhub_cookie_header); # Shut down 5GHz
-		printx("--i Clearing timers...", 2);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.14.10004=;4;"+superhub_req_ext,superhub_cookie_header); # Deactivate Timer for 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.14.10104=;4;"+superhub_req_ext,superhub_cookie_header); # Deactivate Timer for 5GHz
-	elif opt == "3":
-		printx("Enabling Guest"+str_wlan);
-		printx("--i Powering up radios...", 2);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10004=1;2;"+superhub_req_ext,superhub_cookie_header); # Enable 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10104=1;2;"+superhub_req_ext,superhub_cookie_header); # Enable 5GHz
-		printx("--i Clearing timers...", 2);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.14.10004=;4;"+superhub_req_ext,superhub_cookie_header); # Deactivate Timer for 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.14.10104=;4;"+superhub_req_ext,superhub_cookie_header); # Deactivate Timer for 5GHz
-		printx("--i Applying SSIDs...", 2);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.2.10004="+superhub_guestnet_config["ssid"]+";4;"+superhub_req_ext,superhub_cookie_header); # Set SSID for 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.2.10104="+superhub_guestnet_config["ssid"]+";4;"+superhub_req_ext,superhub_cookie_header); # Set SSID for 5GHz
-		printx("--i Setting security modes...", 2);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.5.10004=3;2;"+superhub_req_ext,superhub_cookie_header); # Set secm for 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.22.1.5.10104=3;2;"+superhub_req_ext,superhub_cookie_header); # Set secm for 5GHz
-		printx("--i Configuring WPA Algorithm...", 2);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.26.1.1.10004=2;2;"+superhub_req_ext,superhub_cookie_header); # Set alg for 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.26.1.1.10104=2;2;"+superhub_req_ext,superhub_cookie_header); # Set alg for 5GHz
-		printx("--i Configuring password...", 2);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.26.1.2.10004="+superhub_guestnet_config["psk"]+";4;"+superhub_req_ext,superhub_cookie_header); # Set psk for 2.4GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.3.26.1.2.10104="+superhub_guestnet_config["psk"]+";4;"+superhub_req_ext,superhub_cookie_header); # Set psk for 5GHz
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.2.2.1.39.203=1;2;"+superhub_req_ext,superhub_cookie_header); # Apply parental controls? The web interface does this...
-		printx("Guest network name: "+superhub_guestnet_config["ssid"]);
-		printx("Guest network password: "+superhub_guestnet_config["psk"]);
-		cls.Messages.json_output.update(superhub_guestnet_config);
-	else:
-		raise Exception("WLAN parameter not understood, see help -h");
-
-	#Apply settings: /snmpGet?oids=1.3.6.1.4.1.4115.1.20.1.1.9.0; THEN /snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.9.0=1;2;
-	printx("Router is applying changes...");
-	response_raw = web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.9.0=1;2;"+superhub_req_ext,superhub_cookie_header);
-	if response_raw[0] == "NOTOK": # if there was a socket error
-		raise Exception("Could not apply WLAN configuration settings due to a TCP socket error");
-	else:
-		response = json.loads(response_raw[1].split("\r\n\r\n",1)[1]);
-		if response["1.3.6.1.4.1.4115.1.20.1.1.9.0"] == "1":
-			cls.Messages.json_output["action"] = "success";
-
-		# Return output to the user
-		if set_list_mode == 2:
-			printx(json.dumps(cls.Messages.json_output),0);
-		else:
-			printx("Operation "+cls.Messages.json_output["action"]+".",0);
-"""
-
-
-
-
 class Hub:
 	""" Static methods which administer the hub """
 
 	class Messages:
 		""" Index of various status messages """
 
-		author =			"SuperHub 3 Client API by Nicholas Elliott";
-		version =			"Version "+version;
-		searching =			"Searching for "+superhub_ip_addr+"...";
-		logging_in =		"Logging in...";
-		no_password =		"--! Password not found";
-		enter_password =	"Please enter your SuperHub's passcode: ";
-		firmware_check =	"Checking firmware version...";
+		author =            "SuperHub 3 Client API by Nicholas Elliott";
+		version =           "Version "+version;
+		searching =         "Searching for "+superhub_ip_addr+"...";
+		logging_in =        "Logging in...";
+		no_password =       "--! Password not found";
+		python_version =    "--! Older version of Python detected, please update to 3.5 or above if you run into issues.";
+		enter_password =    "Please enter your SuperHub's passcode: ";
+		firmware_check =    "Checking firmware version...";
 
 
 	class ErrorMessages:
 		""" Index of various exception error messages """
 
-		not_found =			"Could not find SuperHub, please ensure the correct IP address is set";
-		login_failed =		"Could not login to SuperHub, password may be incorrect";
-		firmware_warn =		"Couldn't check firmware version";
+		not_found =         "Could not find SuperHub, please ensure the correct IP address is set";
+		login_failed =      "Could not login to SuperHub, password may be incorrect";
+		firmware_warn =     "Couldn't check firmware version, something must have went wrong with the login.";
+
+	class Oids:
+		""" Index of the OIDs used by the Hub class """
+
+		prefix_set =        "/snmpSet?oid=";
+		prefix_get =        "/walk?oids=";
+		router_status =     "1.3.6.1.4.1.4115.1.3.4.1.9.2";
+		router_firmware =   "1.3.6.1.4.1.4115.1.20.1.1.5.11.0";
+		reboot_request =    "1.3.6.1.4.1.4115.1.20.1.1.5.15.0";
+		reboot_confirm =    "1.3.6.1.2.1.69.1.1.3.0";
+		suffix_reboot =     "=2;2;";
+		suffix_end =        ";";
+
 
 
 	@staticmethod
@@ -585,16 +526,16 @@ class Hub:
 		Keyword arguments:
 		hubpass -- SuperHub password (default empty)"""
 
-		global superhub_cookie_header # necessary so this variable can be changed from within this function
+		global superhub_cookie_header
 		if len(superhub_cookie_header) < 1:
 			hublogin_credentials = bytes(base64.b64encode(bytes(superhub_username+":"+hubpass, "UTF-8"))).decode("utf-8");
 			hublogin_cookie = web(superhub_ip_addr+"/login?arg="+hublogin_credentials+superhub_req_ext);
-			if hublogin_cookie[0] == "NOTOK": # if there was a socket error then return false.
+			if hublogin_cookie[0] == "NOTOK":
 				return False;
 			hublogin_cookie = hublogin_cookie[1].split("\r\n\r\n",1)[1]; # separate the header from the page html
 			if len(hublogin_cookie) < 1: # If the login has failed i.e. hublogin_cookie variable is empty as hub did not return a response.
 				return False;
-			superhub_cookie_header = "Cookie: credential="+hublogin_cookie; ###### INTERACTION WITH OUTSIDE VARIABLE **NOTE: if hublogin_cookie is empty, the login failed
+			superhub_cookie_header = "Cookie: credential="+hublogin_cookie;
 		else:
 			return True;
 		return True;
@@ -620,12 +561,20 @@ class Hub:
 	def find():
 		""" Locates the hub at the IP address specified in superhub_ip_addr """
 
-		html = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.3.4.1.9.2;"+superhub_req_ext); # Request the Router Status API, as this does not require a user login to the router
-		if html[0] == "NOTOK": # if there was a socket error then return false.
+		html = web(superhub_ip_addr +
+					Hub.Oids.prefix_get +
+					Hub.Oids.router_status +
+					Hub.Oids.suffix_end +
+					superhub_req_ext);
+
+		if html[0] == "NOTOK":
 			return False;
-		elif json.loads(html[1].split("\r\n\r\n",1)[1])["1"] == "Finish":
-			return True;
-		else:
+		html = html[1].split("\r\n\r\n",1)[1];
+		try:
+			html = json.loads(html);
+			if html["1"] == "Finish":
+				return True;
+		except json.JSONDecodeError: # NOTE: Compatibility with older Python versions <3.5 change this to "ValueError"
 			pass;
 		return False;
 
@@ -634,15 +583,20 @@ class Hub:
 	def check_firmware():
 		""" Reports whether this script is compatible with the hub firmware """
 
-		session_test = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.5.11.0;"+superhub_req_ext,superhub_cookie_header);
+		session_test = web(superhub_ip_addr +
+							Hub.Oids.prefix_get +
+							Hub.Oids.router_firmware +
+							Hub.Oids.suffix_end +
+							superhub_req_ext,superhub_cookie_header);
+
 		if session_test[0] == "NOTOK": # if there was a socket error then return false.
 			return False;
 		if session_test[1][:15] != "HTTP/1.1 200 OK":
 			printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
 			return False;
-		hub_firmware_version = session_test[1].split("\r\n\r\n",1)[1].split("\n")[1].split(":",1)[1][1:][:-2];
+		hub_firmware_version = json.loads(session_test[1].split("\r\n\r\n",1)[1])[Hub.Oids.router_firmware];
 		if int(re.sub(r"\.", "", hub_firmware_version)) > int(re.sub(r"\.", "", version_firmware)):
-			printx("--! This has not been tested on your SuperHub's firmware version ("+hub_firmware_version+")");
+			printx("--! Your SuperHub has recent firmware version "+hub_firmware_version+" installed, if anything doesn't work please open an issue on GitHub.");
 		else:
 			printx("--i Firmware "+hub_firmware_version, 2);
 		return True;
@@ -653,8 +607,16 @@ class Hub:
 		""" Reboots the hub """
 
 		printx("Rebooting your SuperHub...");
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.4.1.4115.1.20.1.1.5.15.0;"+superhub_req_ext,superhub_cookie_header);
-		web(superhub_ip_addr+"/snmpSet?oid=1.3.6.1.2.1.69.1.1.3.0=2;2;"+superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr +
+			Hub.Oids.prefix_set +
+			Hub.Oids.reboot_request +
+			Hub.Oids.suffix_end +
+			superhub_req_ext,superhub_cookie_header);
+		web(superhub_ip_addr +
+			Hub.Oids.prefix_set +
+			Hub.Oids.reboot_confirm +
+			Hub.Oids.suffix_reboot +
+			superhub_req_ext,superhub_cookie_header);
 		exit(0);
 
 
@@ -746,6 +708,9 @@ class Main:
 		printx(Hub.Messages.author, 2);
 		printx(Hub.Messages.version, 2);
 		printx("",2);
+
+		if sys.version_info[0] == 3 and sys.version_info[1] < 5:
+			printx(Hub.Messages.python_version);
 
 		printx(Hub.Messages.searching);
 		if not Hub.find():
