@@ -1,5 +1,5 @@
 # ClientsAPI-SuperHub3
-Lists Virgin Media Super Hub 3 clients, allows toggling of Guest/Private WLAN networks.
+CLI interface for listing VM Super Hub 3 clients, allows toggling of Guest/Private WLAN networks.
 
 [Read the Wiki](../../wiki)
 

@@ -11,7 +11,7 @@
               |_|
 
  SuperHub 3 Client API
- Version 1.0.4
+ Version 1.0.5
  by Nicholas Elliott
 
 """
@@ -495,7 +495,7 @@ class Hub:
 		no_password =       "--! Password not found";
 		python_version =    "--! Older version of Python detected, please update to 3.5 or above if you run into issues.";
 		enter_password =    "Please enter your SuperHub's passcode: ";
-		firmware_check =    "Checking firmware version...";
+		firmware_check =    "Querying system information...";
 
 
 	class ErrorMessages:
@@ -511,7 +511,10 @@ class Hub:
 		prefix_set =        "/snmpSet?oid=";
 		prefix_get =        "/walk?oids=";
 		router_status =     "1.3.6.1.4.1.4115.1.3.4.1.9.2";
+		router_hardwrev =   "1.3.6.1.4.1.4115.1.20.1.1.5.10.0";
 		router_firmware =   "1.3.6.1.4.1.4115.1.20.1.1.5.11.0";
+		router_serial =     "1.3.6.1.4.1.4115.1.20.1.1.5.8.0";
+		router_uptime =     "1.3.6.1.2.1.1.3.0";
 		reboot_request =    "1.3.6.1.4.1.4115.1.20.1.1.5.15.0";
 		reboot_confirm =    "1.3.6.1.2.1.69.1.1.3.0";
 		suffix_reboot =     "=2;2;";
@@ -581,24 +584,41 @@ class Hub:
 
 	@staticmethod
 	def check_firmware():
-		""" Reports whether this script is compatible with the hub firmware """
+		""" Prints various diagnostic information regarding the hub, also warns regarding firmware compatibility """
 
-		session_test = web(superhub_ip_addr +
-							Hub.Oids.prefix_get +
-							Hub.Oids.router_firmware +
-							Hub.Oids.suffix_end +
-							superhub_req_ext,superhub_cookie_header);
+		diagnostics_index = { Hub.Oids.router_firmware: None,
+								Hub.Oids.router_hardwrev: None,
+								Hub.Oids.router_uptime: None,
+								Hub.Oids.router_serial: None };
 
-		if session_test[0] == "NOTOK": # if there was a socket error then return false.
-			return False;
-		if session_test[1][:15] != "HTTP/1.1 200 OK":
-			printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
-			return False;
-		hub_firmware_version = json.loads(session_test[1].split("\r\n\r\n",1)[1])[Hub.Oids.router_firmware];
-		if int(re.sub(r"\.", "", hub_firmware_version)) > int(re.sub(r"\.", "", version_firmware)):
-			printx("--! Your SuperHub has recent firmware version "+hub_firmware_version+" installed, if anything doesn't work please open an issue on GitHub.");
-		else:
-			printx("--i Firmware "+hub_firmware_version, 2);
+		for oid in diagnostics_index:
+			session_test = web(superhub_ip_addr +
+								Hub.Oids.prefix_get +
+								oid +
+								Hub.Oids.suffix_end +
+								superhub_req_ext,superhub_cookie_header);
+
+			if session_test[0] == "NOTOK": # if there was a socket error then return false.
+				return False;
+			if session_test[1][:15] != "HTTP/1.1 200 OK":
+				printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
+				return False;
+			diagnostics_index[oid] = json.loads(session_test[1].split("\r\n\r\n",1)[1])[oid];
+
+		if int(re.sub(r"\.", "", diagnostics_index[Hub.Oids.router_firmware])) > int(re.sub(r"\.", "", version_firmware)):
+			printx("--! Your SuperHub has updated firmware installed (Version "+diagnostics_index[Hub.Oids.router_firmware]+"), if anything doesn't work please open an issue on GitHub.");
+
+		uptime = ["DDD", "HH", "MM", "SS"];
+		uptime_epoch = int(diagnostics_index[Hub.Oids.router_uptime][:len(diagnostics_index[Hub.Oids.router_uptime])-2]);
+		uptime[0] = int(uptime_epoch/(60*60*24));   # Days
+		uptime[1] = int((uptime_epoch/(60*60))%24); # Hours
+		uptime[2] = int((uptime_epoch/60)%60);      # Minutes
+		uptime[3] = int(uptime_epoch%60);           # Seconds
+		for i in range(0,4):
+			uptime[i] = str(uptime[i]);
+
+		printx("--i Firmware "+diagnostics_index[Hub.Oids.router_firmware]+", Hardware revision "+diagnostics_index[Hub.Oids.router_hardwrev]+", Serial "+diagnostics_index[Hub.Oids.router_serial]);
+		printx("--i System Uptime: "+uptime[0]+" days "+uptime[1]+"h "+uptime[2]+"m "+uptime[3]+"s");
 		return True;
 
 
