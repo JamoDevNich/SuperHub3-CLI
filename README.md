@@ -30,7 +30,7 @@ Multiple output modes are available through command line arguments, such as a js
 
 ## Feedback
 ### Feature Suggestions
-Feel free to open a new issue with a feature suggestion, or fork/pull request.
+Feel free to open a new issue with a feature suggestion, or merge request.
 
 ### Acknowledgements
 Thanks to the following:
