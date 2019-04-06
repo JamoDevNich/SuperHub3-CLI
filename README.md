@@ -5,6 +5,8 @@ CLI interface for listing VM Super Hub 3 clients, allows toggling of Guest/Priva
 
 The Superhub 3 remembers clients that have previously disconnected from the router, but does not present them to the user through the main interface. This utility shows the user currently connected clients, as well as disconnected ones.
 
+![Image showing router clients](https://i.imgur.com/L1low59.png)
+
 ## Getting Started
 ### Requirements
 Python 3.5 and above, tested on both Windows and Linux. No third party libraries necessary.
@@ -18,8 +20,6 @@ The Guest and Private WLANs can be toggled via the menu, or via the `--wlan` arg
 
 ### Viewing clients
 The router's clients can be viewed through the menu, or through the `--clients` command line argument.
-
-![Image showing router clients](https://i.imgur.com/L1low59.png)
 
 ### Rebooting the router
 You can reboot the router via the menu, or through the `--reboot` command line argument.
