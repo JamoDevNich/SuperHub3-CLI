@@ -1,5 +1,5 @@
 # ClientsAPI-SuperHub3
-CLI interface for listing VM Super Hub 3 clients, allows toggling of Guest/Private WLAN networks.
+A command-line interface for managing the VM SuperHub 3/ARRIS TG2492S/CE router. Allows listing connected devices, toggle private and public WLAN, and rebooting.
 
 [Read the Wiki](../../wiki)
 
