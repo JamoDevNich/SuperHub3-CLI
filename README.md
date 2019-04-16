@@ -6,13 +6,10 @@ A command-line interface for managing the VM SuperHub 3/ARRIS TG2492S/CE router.
 The Superhub 3 remembers clients that have previously disconnected from the router, but does not present them to the user through the main interface. This utility shows the user currently connected clients, as well as disconnected ones.
 
 ## Screenshots
-### Main Menu
 
-![Image showing main menu](https://i.imgur.com/LG0UMOC.png)
+![Image showing main menu](https://i.imgur.com/G4J9A4i.png)
 
-### Viewing Clients
-
-![Image showing router clients](https://i.imgur.com/N4pZNBb.png)
+![Image showing router clients](https://i.imgur.com/0qvSwUM.png)
 
 ## Getting Started
 ### Requirements
