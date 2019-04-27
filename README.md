@@ -1,9 +1,7 @@
 # ClientsAPI-SuperHub3
-A command-line interface for managing the VM SuperHub 3/ARRIS TG2492S/CE router. Allows listing connected devices, toggle private and guest WLAN, and rebooting.
+A command-line interface for managing the VM SuperHub 3/ARRIS TG2492S/CE router. Allows listing current/past connected devices, toggle private/guest WLAN, rebooting and viewing router status.
 
 [Read the Wiki](../../wiki)
-
-The Superhub 3 remembers clients that have previously disconnected from the router, but does not present them to the user through the main interface. This utility shows the user currently connected clients, as well as disconnected ones.
 
 ## Screenshots
 
@@ -24,6 +22,9 @@ The Guest and Private WLANs can be toggled via the menu, or via the `--wlan` arg
 
 ### Viewing clients
 The router's clients can be viewed through the menu, or through the `--clients` command line argument.
+
+### Viewing router status
+The router's status, such as uptime and WAN address, can be viewed through the menu, or through the `--diagnostic` command line argument.
 
 ### Rebooting the router
 You can reboot the router via the menu, or through the `--reboot` command line argument.
