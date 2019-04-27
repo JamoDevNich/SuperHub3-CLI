@@ -11,7 +11,7 @@
               |_|
 
  SuperHub 3 Client API
- Version 1.0.5 Rev 1
+ Version 1.0.6
  by Nicholas Elliott
 
 """
@@ -24,8 +24,8 @@ import random
 import base64
 import argparse
 
-version = "1.0.5";                  # The version number of this utility
-version_firmware = "9.1.1802.610";   # The firmware version this utility was tested on
+version = "1.0.6";                  # The version number of this utility
+version_firmware = "9.1.1802.610";  # The firmware version this utility was tested on
 superhub_username = "admin";        # Username goes here, usually this doesn't require changing
 superhub_password = "";             # Password goes here, can be pre-filled or left blank
 superhub_cookie_header = "";        # This is where the session cookie is stored, don't modify. A new cookie is generated with each request.
@@ -38,12 +38,13 @@ superhub_guestnet_config = {"ssid": "VM_Guest", "psk": "Ch4ngeP4ssword987Ple4se"
 superhub_nonce = str(random.randint(10000,99999)); # https://github.com/JamoDevNich/ClientsAPI-SuperHub3/wiki/OIDs-Documentation#introduction
 superhub_req_ext = "&_n="+superhub_nonce;
 
-parser.add_argument("-p", "--password", help="Provide the password for the SuperHub", metavar="N");
+parser.add_argument("-p", "--password", help="Provide the password for the router", metavar="N");
 parser.add_argument("-c", "--clients", help="Present client information", action="store_true");
 parser.add_argument("-w", "--wlan", help="Toggle the WLAN off [0] or on [1]. Guest WLAN off [2] or on [3]. Toggles both 2.4GHz and 5GHz.", metavar="N");
 parser.add_argument("-f", "--format", help="Present output in [j]son or [c]onsole format. Silent mode may be necessary.", metavar="X");
 parser.add_argument("-v", "--verbose", help="Enable verbose mode", action="store_true");
-parser.add_argument("-r", "--reboot", help="Reboot your SuperHub", action="store_true");
+parser.add_argument("-d", "--diagnostic", help="View router status", action="store_true");
+parser.add_argument("-r", "--reboot", help="Reboot your router", action="store_true");
 parser.add_argument("-s", "--silent", help="Only output result. Note: Ensure desired operation in normal mode before invoking silent mode", action="store_true");
 args = parser.parse_args();
 
@@ -280,33 +281,23 @@ class WLAN:
 
 
     @classmethod
-    def radios_disable(cls,radio_2400_name,radio_5000_name) -> None:
+    def radios_disable(cls,radio_name) -> None:
         """ Manages the disabling of the WLAN radios """
 
         web(superhub_ip_addr +
             cls.Oids.prefix +
-            radio_2400_name +
-            cls.Control.radio_disable +
-            superhub_req_ext,superhub_cookie_header);
-        web(superhub_ip_addr +
-            cls.Oids.prefix +
-            radio_5000_name +
+            radio_name +
             cls.Control.radio_disable +
             superhub_req_ext,superhub_cookie_header);
 
 
     @classmethod
-    def radios_enable(cls,radio_2400_name,radio_5000_name) -> None:
+    def radios_enable(cls,radio_name) -> None:
         """ Manages the enabling of the WLAN radios """
 
         web(superhub_ip_addr +
             cls.Oids.prefix +
-            radio_2400_name +
-            cls.Control.radio_enable +
-            superhub_req_ext,superhub_cookie_header);
-        web(superhub_ip_addr +
-            cls.Oids.prefix +
-            radio_5000_name +
+            radio_name +
             cls.Control.radio_enable +
             superhub_req_ext,superhub_cookie_header);
 
@@ -316,7 +307,8 @@ class WLAN:
         """ Disables the Guest WLAN """
 
         printx(cls.Messages.radio_off, 2);
-        cls.radios_disable(cls.Oids.radio_2400_guest,cls.Oids.radio_5000_guest);
+        cls.radios_disable(cls.Oids.radio_2400_guest);
+        cls.radios_disable(cls.Oids.radio_5000_guest);
 
         printx(cls.Messages.timers, 2);
         cls.timer_reset();
@@ -327,7 +319,8 @@ class WLAN:
         """ Enables the Guest WLAN """
 
         printx(cls.Messages.radio_on, 2);
-        cls.radios_enable(cls.Oids.radio_2400_guest,cls.Oids.radio_5000_guest);
+        cls.radios_enable(cls.Oids.radio_2400_guest);
+        cls.radios_enable(cls.Oids.radio_5000_guest);
 
         printx(cls.Messages.timers, 2);
         cls.timer_reset();
@@ -423,6 +416,7 @@ class WLAN:
             response = json.loads(response_raw[1].split("\r\n\r\n",1)[1]);
             if response[cls.Oids.apply_changes] == "1":
                 return True;
+        return False;
 
 
     @classmethod
@@ -440,13 +434,15 @@ class WLAN:
             """ Disable WLAN """
 
             printx(cls.Messages.disable+cls.Messages.radios);
-            cls.radios_disable(cls.Oids.radio_2400_main,cls.Oids.radio_5000_main);
+            cls.radios_disable(cls.Oids.radio_2400_main);
+            cls.radios_disable(cls.Oids.radio_5000_main);
 
         elif function_id == "1":
             """ Enable WLAN """
 
             printx(cls.Messages.enable+cls.Messages.radios);
-            cls.radios_enable(cls.Oids.radio_2400_main,cls.Oids.radio_5000_main);
+            cls.radios_enable(cls.Oids.radio_2400_main);
+            cls.radios_enable(cls.Oids.radio_5000_main);
 
         elif function_id == "2":
             """ Disable Guest WLAN """
@@ -481,6 +477,55 @@ class WLAN:
 
 
 
+class Utility:
+    """Static 'utility' methods"""
+
+    class Convert:
+        """ A group of static conversion methods """
+
+        @staticmethod
+        def hex_to_ipv4(hex: str) -> str:
+            """ Converts a hexadecimal encoded IP address into a decimal dot separated string """
+
+            if len(hex) < 8:
+                return "0.0.0.0";
+            else:
+                octets = re.findall(r"([0-9A-Fa-f]{2})", hex.replace("$","")); # Code from original firmware
+                for octet in range(len(octets)):
+                    octets[octet] = str(int(octets[octet], 16)); # Converting to string, because string.join does not accept integers
+                return ".".join(octets);
+
+
+        @staticmethod
+        def ipv4_to_hex(ipv4: str) -> str:
+            """ Converts a decimal dot separated string to a hexadecimal encoded IP address """
+
+            ip = ipv4.split(".");
+            if len(ip) != 4:
+                return "$00000000";
+            else:
+                for octet in range(len(ip)):
+                    ip[octet] = str(hex(int(ip[octet]))).replace("0x","");
+                    if int(ip[octet], 16) < 10:
+                        ip[octet] = "0" + ip[octet]; # Pad with a zero if less than 10
+                return "$"+"".join(ip);
+
+    class Epoch:
+        """ A group of static time manipulation methods """
+
+        @staticmethod
+        def duration(epoch: int) -> list:
+            """ Converts a given epoch timestamp into a list containing days, hours, minutes and seconds """
+
+            dur = ["DDD", "HH", "MM", "SS"];
+            dur[0] = int(epoch/(60*60*24));   # Days
+            dur[1] = int((epoch/(60*60))%24); # Hours
+            dur[2] = int((epoch/60)%60);      # Minutes
+            dur[3] = int(epoch%60);           # Seconds
+            return dur;
+
+
+
 class Hub:
     """ Static methods which administer the hub """
 
@@ -494,7 +539,7 @@ class Hub:
         no_password =       "--! Password not found";
         python_version =    "--! Older version of Python detected, please update to 3.5 or above if you run into issues.";
         enter_password =    "Please enter your SuperHub's passcode: ";
-        firmware_check =    "Querying system information...";
+        firmware_check =    "Checking firmware compatibility...";
 
 
     class ErrorMessages:
@@ -508,17 +553,23 @@ class Hub:
     class Oids:
         """ Index of the OIDs used by the Hub class """
 
-        prefix_set =        "/snmpSet?oid=";
-        prefix_get =        "/walk?oids=";
-        router_status =     "1.3.6.1.4.1.4115.1.3.4.1.9.2";
-        router_hardwrev =   "1.3.6.1.4.1.4115.1.20.1.1.5.10.0";
-        router_firmware =   "1.3.6.1.4.1.4115.1.20.1.1.5.11.0";
-        router_serial =     "1.3.6.1.4.1.4115.1.20.1.1.5.8.0";
-        router_uptime =     "1.3.6.1.2.1.1.3.0";
-        reboot_request =    "1.3.6.1.4.1.4115.1.20.1.1.5.15.0";
-        reboot_confirm =    "1.3.6.1.2.1.69.1.1.3.0";
-        suffix_reboot =     "=2;2;";
-        suffix_end =        ";";
+        prefix_set =         "/snmpSet?oid=";
+        prefix_get =         "/snmpGet?oids="; # changed for bulk fetching diagnostic info
+        prefix_walk =        "/walk?oids=";
+        router_status =      "1.3.6.1.4.1.4115.1.3.4.1.9.2";
+        router_hardwrev =    "1.3.6.1.4.1.4115.1.20.1.1.5.10.0";
+        router_firmware =    "1.3.6.1.4.1.4115.1.20.1.1.5.11.0";
+        router_ip_gateway =  "1.3.6.1.4.1.4115.1.20.1.1.1.7.1.6.1"; # Hex Format
+        router_ip_wan =      "1.3.6.1.4.1.4115.1.20.1.1.1.7.1.3.1"; # Hex Format
+        router_ip_dns_1 =    "1.3.6.1.4.1.4115.1.20.1.1.1.11.2.1.3.1"; # Hex Format
+        router_ip_dns_2 =    "1.3.6.1.4.1.4115.1.20.1.1.1.11.2.1.3.2"; # Hex Format
+        router_lease_rem =   "1.3.6.1.4.1.4115.1.20.1.1.1.12.3.0"; # in seconds
+        router_serial =      "1.3.6.1.4.1.4115.1.20.1.1.5.8.0";
+        router_uptime =      "1.3.6.1.2.1.1.3.0";
+        reboot_request =     "1.3.6.1.4.1.4115.1.20.1.1.5.15.0";
+        reboot_confirm =     "1.3.6.1.2.1.69.1.1.3.0";
+        suffix_reboot =      "=2;2;";
+        suffix_end =         ";";
 
 
     @staticmethod
@@ -564,7 +615,7 @@ class Hub:
         """ Locates the hub at the IP address specified in superhub_ip_addr """
 
         html = web(superhub_ip_addr +
-                    Hub.Oids.prefix_get +
+                    Hub.Oids.prefix_walk +
                     Hub.Oids.router_status +
                     Hub.Oids.suffix_end +
                     superhub_req_ext);
@@ -574,6 +625,7 @@ class Hub:
         html = html[1].split("\r\n\r\n",1)[1];
         try:
             html = json.loads(html);
+
             if html["1"] == "Finish":
                 return True;
         except json.JSONDecodeError: # NOTE: Compatibility with older Python versions <3.5 change this to "ValueError"
@@ -582,49 +634,27 @@ class Hub:
 
 
     @staticmethod
-    def uptime_realtime(epoch: int) -> list:
-        """ Converts a given epoch timestamp into a list containing days, hours, minutes and seconds """
-
-        uptime = ["DDD", "HH", "MM", "SS"];
-        uptime[0] = int(epoch/(60*60*24));   # Days
-        uptime[1] = int((epoch/(60*60))%24); # Hours
-        uptime[2] = int((epoch/60)%60);      # Minutes
-        uptime[3] = int(epoch%60);           # Seconds
-        return uptime;
-
-
-    @staticmethod
     def check_firmware() -> bool:
-        """ Prints various diagnostic information regarding the hub, also warns regarding firmware compatibility """
+        """ Verifies hub firmware compatibility, prints result to user if attention is needed """
 
-        diagnostics_index = { Hub.Oids.router_firmware: None,
-                                Hub.Oids.router_hardwrev: None,
-                                Hub.Oids.router_uptime: None,
-                                Hub.Oids.router_serial: None };
+        req_check_firmware = web(superhub_ip_addr +
+                            Hub.Oids.prefix_get +
+                            Hub.Oids.router_firmware +
+                            Hub.Oids.suffix_end +
+                            superhub_req_ext,superhub_cookie_header);
 
-        for oid in diagnostics_index:
-            session_test = web(superhub_ip_addr +
-                                Hub.Oids.prefix_get +
-                                oid +
-                                Hub.Oids.suffix_end +
-                                superhub_req_ext,superhub_cookie_header);
+        if req_check_firmware[0] == "NOTOK": # if there was a socket error then return false.
+            return False;
+        if req_check_firmware[1][:15] != "HTTP/1.1 200 OK":
+            printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
+            return False;
 
-            if session_test[0] == "NOTOK": # if there was a socket error then return false.
-                return False;
-            if session_test[1][:15] != "HTTP/1.1 200 OK":
-                printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
-                return False;
-            diagnostics_index[oid] = json.loads(session_test[1].split("\r\n\r\n",1)[1])[oid];
+        res_check_firmware = json.loads(req_check_firmware[1].split("\r\n\r\n",1)[1])[Hub.Oids.router_firmware];
 
-        if int(re.sub(r"\.", "", diagnostics_index[Hub.Oids.router_firmware])) > int(re.sub(r"\.", "", version_firmware)):
+        printx("--i Firmware Version: "+res_check_firmware, 2);
+
+        if int(re.sub(r"\.", "", res_check_firmware)) > int(re.sub(r"\.", "", version_firmware)):
             printx("--! Your SuperHub has updated firmware installed (Version "+diagnostics_index[Hub.Oids.router_firmware]+"), if anything doesn't work please open an issue on GitHub.");
-
-        uptime = Hub.uptime_realtime(int(diagnostics_index[Hub.Oids.router_uptime][:len(diagnostics_index[Hub.Oids.router_uptime])-2]));
-        for i in range(0,4):
-            uptime[i] = str(uptime[i]);
-
-        printx("--i Firmware "+diagnostics_index[Hub.Oids.router_firmware]+", Hardware revision "+diagnostics_index[Hub.Oids.router_hardwrev]+", Serial "+diagnostics_index[Hub.Oids.router_serial]);
-        printx("--i System Uptime: "+uptime[0]+" days "+uptime[1]+"h "+uptime[2]+"m "+uptime[3]+"s");
         return True;
 
 
@@ -647,7 +677,7 @@ class Hub:
 
 
     @staticmethod
-    def get_clients() -> None:
+    def clients() -> None:
         """ Prints the clients currently connected to the hub, requires Clients class """
 
         client_inst = Clients();
@@ -687,6 +717,77 @@ class Hub:
         WLAN.operate(arg);
 
 
+    @staticmethod
+    def diagnostic():
+        """ Retrieves and prints statistical information about the router """
+
+        diagnostics_index = { Hub.Oids.router_firmware: None,
+                                Hub.Oids.router_hardwrev: None,
+                                Hub.Oids.router_uptime: None,
+                                Hub.Oids.router_serial: None,
+                                Hub.Oids.router_ip_wan: None,
+                                Hub.Oids.router_ip_dns_1: None,
+                                Hub.Oids.router_ip_dns_2: None,
+                                Hub.Oids.router_lease_rem: None };
+
+        printx("Querying system information...");
+
+        session_test = web(superhub_ip_addr +
+                            Hub.Oids.prefix_get +
+                            ";".join(diagnostics_index.keys()) +
+                            Hub.Oids.suffix_end +
+                            superhub_req_ext,superhub_cookie_header);
+
+        if session_test[0] == "NOTOK": # if there was a socket error then return false.
+            return False;
+        if session_test[1][:15] != "HTTP/1.1 200 OK":
+            printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
+            return False;
+
+        diagnostics_index = json.loads(session_test[1].split("\r\n\r\n",1)[1]);
+
+        uptime = Utility.Epoch.duration(int(diagnostics_index[Hub.Oids.router_uptime][:len(diagnostics_index[Hub.Oids.router_uptime])-2]));
+        for i in range(0,4):
+            uptime[i] = str(uptime[i]);
+
+        lease_time_remaining = Utility.Epoch.duration(int(diagnostics_index[Hub.Oids.router_lease_rem]));
+        for i in range(0,4):
+            lease_time_remaining[i] = str(lease_time_remaining[i]);
+
+        diagnostics_index[Hub.Oids.router_ip_wan] = Utility.Convert.hex_to_ipv4(diagnostics_index[Hub.Oids.router_ip_wan]);
+        diagnostics_index[Hub.Oids.router_ip_dns_1] = Utility.Convert.hex_to_ipv4(diagnostics_index[Hub.Oids.router_ip_dns_1]);
+        diagnostics_index[Hub.Oids.router_ip_dns_2] = Utility.Convert.hex_to_ipv4(diagnostics_index[Hub.Oids.router_ip_dns_2]);
+
+        if set_list_mode is 2:
+            di = diagnostics_index;
+            di_json = { "firmware": di[Hub.Oids.router_firmware],
+                                        "hardware": di[Hub.Oids.router_hardwrev],
+                                        "uptime": di[Hub.Oids.router_uptime],
+                                        "serial": di[Hub.Oids.router_serial],
+                                        "ip": {
+                                            "wan": di[Hub.Oids.router_ip_wan],
+                                            "dns1": di[Hub.Oids.router_ip_dns_1],
+                                            "dns2": di[Hub.Oids.router_ip_dns_2] }};
+            printx(json.dumps(di_json), 0);
+        else:
+            printx("");
+            printx("== System ==");
+            printx("Serial: " + diagnostics_index[Hub.Oids.router_serial]);
+            printx("Hardware Revision: " + diagnostics_index[Hub.Oids.router_hardwrev]);
+            printx("Uptime: "+uptime[0]+" days "+uptime[1]+"h "+uptime[2]+"m "+uptime[3]+"s");
+            printx("");
+            printx("== Software ==");
+            printx("Firmware: " + diagnostics_index[Hub.Oids.router_firmware]);
+            printx("");
+            printx("== IP Address ==");
+            printx("Wan IP: " + diagnostics_index[Hub.Oids.router_ip_wan]);
+            printx("DHCP lease expires in: "+lease_time_remaining[0]+" days "+lease_time_remaining[1]+"h "+lease_time_remaining[2]+"m "+lease_time_remaining[3]+"s");
+            printx("");
+            printx("== Network ==")
+            printx("DNS 1: " + diagnostics_index[Hub.Oids.router_ip_dns_1]);
+            printx("DNS 2: " + diagnostics_index[Hub.Oids.router_ip_dns_2]);
+
+
 
 class Main:
     """ Core script methods """
@@ -695,32 +796,38 @@ class Main:
     def menu():
         """ Main menu for console interface """
 
-        menu_in_loop = True;
-        while menu_in_loop:
-            printx();
-            printx("   wlan 0/1     Toggle Private WLAN off/on");
-            printx("   wlan 2/3     Toggle Guest WLAN off/on")
-            printx("   clients      List router clients");
-            printx("   reboot       Reboot your router");
-            printx("   q            Exit program");
-            printx();
-            command = "";
-            while command.split(" ")[0] not in ["wlan", "clients", "reboot", "q"]:
-                command = input("Enter a command: ");
-                if command.split(" ")[0] == "wlan":
-                    if len(command.split(" ")) > 1:
-                        Hub.wlan(command.split(" ")[1]);
-                    else:
-                        printx(WLAN.ErrorMessages.specify_parameter);
-                elif command == "clients":
-                    Hub.get_clients();
-                elif command == "reboot":
-                    Hub.reboot();
-                    menu_in_loop = False;
-                elif command == "q":
-                    menu_in_loop = False;
+        printx();
+        printx("   help         Show this menu")
+        printx("   wlan 0/1     Toggle Private WLAN off/on");
+        printx("   wlan 2/3     Toggle Guest WLAN off/on")
+        printx("   clients      List router clients");
+        printx("   diagnostic   View router status information");
+        printx("   reboot       Reboot your router");
+        printx("   q            Exit program");
+        printx();
+
+    @staticmethod
+    def console():
+        """ Handles user input """
+
+        command = "";
+        while command.split(" ")[0] not in ["reboot", "q", "exit"]:
+            command = input("Enter a command: ");
+            if command == "help":
+                Main.menu();
+            elif command.split(" ")[0] == "wlan":
+                if len(command.split(" ")) > 1:
+                    Hub.wlan(command.split(" ")[1]);
                 else:
-                    pass;
+                    printx(WLAN.ErrorMessages.specify_parameter);
+            elif command == "clients":
+                Hub.clients();
+            elif command == "diagnostic":
+                Hub.diagnostic();
+            elif command == "reboot":
+                Hub.reboot();
+            else:
+                pass;
 
 
     @staticmethod
@@ -758,13 +865,16 @@ class Main:
             raise Exception(Hub.ErrorMessages.firmware_warn);
 
         if args.clients is True:
-            Hub.get_clients();
+            Hub.clients();
         elif args.reboot is True:
             Hub.reboot();
         elif args.wlan is not None: # not None as it takes its own parameters
             Hub.wlan(args.wlan);
+        elif args.diagnostic is True:
+            Hub.diagnostic();
         else:
             Main.menu();
+            Main.console();
         Hub.logout();
 
 Main.app();
