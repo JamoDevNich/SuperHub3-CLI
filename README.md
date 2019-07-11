@@ -1,4 +1,4 @@
-# ClientsAPI-SuperHub3
+# SuperHub3-CLI
 A command-line interface for managing the VM SuperHub 3/ARRIS TG2492S/CE router. Allows listing current/past connected devices, toggle private/guest WLAN, rebooting and viewing router status.
 
 [Read the Wiki](../../wiki)
