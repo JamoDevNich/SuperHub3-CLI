@@ -11,7 +11,7 @@
               |_|
 
  SuperHub 3 Client API
- Version 1.0.6
+ Version 1.0.7
  by Nicholas Elliott
 
 """
@@ -24,7 +24,7 @@ import random
 import base64
 import argparse
 
-version = "1.0.6";                  # The version number of this utility
+version = "1.0.7";                  # The version number of this utility
 version_firmware = "9.1.1802.610";  # The firmware version this utility was tested on
 superhub_username = "admin";        # Username goes here, usually this doesn't require changing
 superhub_password = "";             # Password goes here, can be pre-filled or left blank
@@ -646,7 +646,7 @@ class Hub:
         if req_check_firmware[0] == "NOTOK": # if there was a socket error then return false.
             return False;
         if req_check_firmware[1][:15] != "HTTP/1.1 200 OK":
-            printx("--! HTTP/1.1 Response Code "+session_test[1][9:12]+" Received");
+            printx("--! HTTP/1.1 Response Code "+req_check_firmware[1][9:12]+" Received");
             return False;
 
         res_check_firmware = json.loads(req_check_firmware[1].split("\r\n\r\n",1)[1])[Hub.Oids.router_firmware];
@@ -654,7 +654,7 @@ class Hub:
         printx("--i Firmware Version: "+res_check_firmware, 2);
 
         if int(re.sub(r"\.", "", res_check_firmware)) > int(re.sub(r"\.", "", version_firmware)):
-            printx("--! Your SuperHub has updated firmware installed (Version "+diagnostics_index[Hub.Oids.router_firmware]+"), if anything doesn't work please open an issue on GitHub.");
+            printx("--! Your SuperHub has updated firmware installed (Version "+res_check_firmware+"), if anything doesn't work please open an issue on GitHub.");
         return True;
 
 
