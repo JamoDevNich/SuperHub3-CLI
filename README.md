@@ -1,5 +1,7 @@
 # SuperHub3-CLI
-A command-line interface for managing the VM SuperHub 3/ARRIS TG2492S/CE router. Allows listing current/past connected devices, toggle private/guest WLAN, rebooting and viewing router status.
+A command-line interface for interacting with the Virgin Media SuperHub 3/ARRIS TG2492S/CE broadband router. Allows listing current/past connected devices, toggle private/guest WLAN, rebooting and viewing router status.
+
+**Warning: This branch is for version 2.0.0 which is in development. Some features may be broken - please use the stable 1.x.x branch for now.**
 
 [Read the Wiki](../../wiki)
 

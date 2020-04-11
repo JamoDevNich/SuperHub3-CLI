@@ -11,7 +11,7 @@
               |_|
 
  SuperHub 3 Client API
- Version 1.0.8
+ Version 2.0.0-a0
  by Nicholas Elliott
 
 """
@@ -24,7 +24,7 @@ import random
 import base64
 import argparse
 
-version = "1.0.8";                   # The version number of this utility
+version = "2.0.0-a0";                   # The version number of this utility
 version_firmware = "9.1.1811.401";   # The firmware version this utility was tested on
 superhub_username = "admin";         # Username goes here, usually this doesn't require changing
 superhub_password = "";              # Password goes here, can be pre-filled or left blank
