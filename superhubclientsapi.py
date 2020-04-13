@@ -1,5 +1,12 @@
 #!/usr/bin/python3
 
+import re
+import sys
+import json
+import random
+import base64
+import argparse
+
 """
    _____                       _    _       _        _____ _ _            _              _____ _____
   / ____|                     | |  | |     | |      / ____| (_)          | |       /\   |  __ \_   _|
@@ -11,20 +18,12 @@
               |_|
 
  SuperHub 3 Client API
- Version 2.0.0-a0
- by Nicholas Elliott
+ Version 2.0.a0
+ https://github.com/JamoDevNich
 
 """
 
-import re
-import sys
-import json
-import socket
-import random
-import base64
-import argparse
-
-version = "2.0.0-a0";                   # The version number of this utility
+version = "2.0.a0";                   # The version number of this utility
 version_firmware = "9.1.1811.401";   # The firmware version this utility was tested on
 superhub_username = "admin";         # Username goes here, usually this doesn't require changing
 superhub_password = "";              # Password goes here, can be pre-filled or left blank
@@ -65,73 +64,28 @@ if args.format is not None:
 
 
 def printx(text="", verbosetype=1):
-    """Prints text to the console
+    """Print text to the console.
 
-    Keyword arguments:
+    Keyword Arguments:
+    -----------------
     text -- input text (default empty)
-    verbosetype -- verbose level at which text will print (default 1)"""
+    verbosetype -- verbose level at which text will print (default 1)
 
+    """
     if set_verbose_mode >= verbosetype:
         print(text);
 
-
-def web(addr: str, customheader=None) -> list:  # Note, this eventually may get replaced by a proper HTTP request library
-    """Performs a web request and returns result in a list
-
-    Keyword arguments:
-    addr -- the address to query
-    customheader -- custom header to send (default no-cache)"""
-
-    if customheader is None:
-        customheader = "Cache-Control: no-cache";
-
-    status = "418";
-    svr_furl = addr.split("/", 1);
-    svr_host = svr_furl[0];
-    svr_ureq = "";
-    svr_addr = socket.gethostbyname(svr_host);
-    response = "";
-
-    if len(svr_furl) > 1:
-        svr_ureq = svr_furl[1];  # If a full URI path is available then append it to the GET request
-
-    request_headers_list = ["GET /"+svr_ureq+" HTTP/1.1", "Host: "+svr_host, "Accept: text/html", "User-Agent: python-3.3", "Connection: close", customheader, ];
-    request_headers_string = "";
-
-    for header in request_headers_list:
-        request_headers_string = request_headers_string + header + "\r\n";
-    request_headers_string = request_headers_string + "\r\n";
-    printx(request_headers_string, 3);
-    try:
-        socket_instance = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
-        socket_instance.connect((svr_addr, 80));
-        socket_instance.send(request_headers_string.encode());
-        responsebuffer = socket_instance.recv(1024);
-        while (len(responsebuffer) > 0):
-            response += responsebuffer.decode("utf-8");
-            responsebuffer = socket_instance.recv(1024);
-        socket_instance.close();
-        status = "OK"
-    except:
-        status = "NOTOK"
-        printx("--> A socket error occurred", 2);
-    printx(response, 3);
-    return [status, response];
-
-
 class Clients:
-    """ Manages the retrieval and processing of SuperHub clients """
+    """Manages the retrieval and processing of SuperHub clients."""
 
     def __init__(self):
-        """ Constructor """
-
+        """TODO: Clean up."""
         self.clients = [];  # Stored in the format HOSTNAME - CONN STATUS - IP ADDRESS - MAC ADDRESS
         self.__raw = "";
         self.error = False;
 
     def fetch(self) -> None:
-        """ Fetches SuperHub clients """
-
+        """Fetch SuperHub clients."""
         clients_list_raw = web(superhub_ip_addr+"/walk?oids=1.3.6.1.4.1.4115.1.20.1.1.2.4.2;"+superhub_req_ext, superhub_cookie_header);
         if clients_list_raw[0] == "NOTOK":  # if there was a socket error then return false.
             self.error = True;
@@ -139,8 +93,7 @@ class Clients:
             self.__raw = clients_list_raw[1].split("\r\n\r\n", 1)[1];  # return a json formatted string
 
     def sort(self) -> None:
-        """ Parses and organises the retrieved list of clients """
-
+        """Parse and sort the clients."""
         id_ipaddr_hostname = "1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.3.200.1.4.";  # the prefix for ip address + hostnames
         id_ipaddr_connstat = "1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.14.200.1.4.";  # the prefix for ip address + connection status
         id_ipaddr_macaddrs = "1.3.6.1.4.1.4115.1.20.1.1.2.4.2.1.4.200.1.4.";  # the prefix for ip address + mac address
@@ -160,7 +113,7 @@ class Clients:
         self.__raw = re.sub(r",1:Finish", "", self.__raw);
         client_data = self.__raw.split(",");
 
-        """ Place IP addresses and hostnames into a list """
+        """Place IP addresses and hostnames into a list."""
         for item in client_data:
             if item[:len(id_ipaddr_hostname)] == id_ipaddr_hostname:
                 temp_storage.append(item);
@@ -170,7 +123,7 @@ class Clients:
         printx("--> "+str(len(temp_storage))+" devices identified", 2);
         temp_storage = [];
 
-        """ Place IP addresses and MAC addresses into a list """
+        """Place IP addresses and MAC addresses into a list."""
         for item in client_data:
             if item[:len(id_ipaddr_macaddrs)] == id_ipaddr_macaddrs:
                 temp_storage.append(item);
@@ -184,7 +137,7 @@ class Clients:
         printx("--> "+str(len(temp_storage))+" mac addresses identified", 2);
         temp_storage = [];
 
-        """ Place IP addresses and connection status into a list """
+        """Place IP addresses and connection status into a list."""
         for item in client_data:
             if item[:len(id_ipaddr_connstat)] == id_ipaddr_connstat:
                 temp_storage.append(item);
@@ -194,7 +147,7 @@ class Clients:
         printx("--> "+str(len(temp_storage))+" devices validated", 2);
         temp_storage = [];
 
-        """ Merge clients into the self.clients list """
+        """Merge clients into the self.clients list."""
         for item in devices_all:
             for connstatus in devices_connected:
                 for macaddrlist in devices_macaddrs:
@@ -208,11 +161,9 @@ class Clients:
 
 
 class WLAN:
-    """ Static methods which control the state of the WLAN """
-
+    """Static methods which control the state of the WLAN."""
     class Messages:
-        """ Messages for the various states and notifications """
-
+        """Messages for the various states and notifications."""
         json_output = {"action": "failed"};
         enable = "Enabling ";
         disable = "Disabling ";
@@ -230,14 +181,12 @@ class WLAN:
         success = "Changes applied successfully!";
 
     class ErrorMessages:
-        """ Messages for the various critical errors which may occur """
-
+        """Messages for the various critical errors which may occur."""
         specify_parameter = "--! Please specify 0/1, 2/3 with the wlan parameter.";
         changes_failed = "--! Changes could not be applied - possibly due to TCP socket error";
 
     class Oids:
-        """ Index of the OIDs used by the WLAN class """
-
+        """Index of the OIDs used by the WLAN class."""
         prefix = "/snmpSet?oid=";
         radio_2400_main = "1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10001";
         radio_5000_main = "1.3.6.1.4.1.4115.1.20.1.1.3.22.1.3.10101";
@@ -257,8 +206,7 @@ class WLAN:
         apply_changes = "1.3.6.1.4.1.4115.1.20.1.1.9.0";
 
     class Control:
-        """ Index of the various OID parameters used """
-
+        """Index of the various OID parameters used."""
         radio_disable = "=2;2;";
         radio_enable = "=1;2;";
         parental_disable = "=2;2";  # Disable parental controls - NOT VERIFIED
@@ -272,8 +220,7 @@ class WLAN:
 
     @classmethod
     def radios_disable(cls, radio_name) -> None:
-        """ Manages the disabling of the WLAN radios """
-
+        """Manages the disabling of the WLAN radios."""
         web(superhub_ip_addr
             + cls.Oids.prefix
             + radio_name
@@ -282,8 +229,7 @@ class WLAN:
 
     @classmethod
     def radios_enable(cls, radio_name) -> None:
-        """ Manages the enabling of the WLAN radios """
-
+        """Manages the enabling of the WLAN radios."""
         web(superhub_ip_addr
             + cls.Oids.prefix
             + radio_name
@@ -292,8 +238,7 @@ class WLAN:
 
     @classmethod
     def guest_disable(cls) -> None:
-        """ Disables the Guest WLAN """
-
+        """Disables the Guest WLAN."""
         printx(cls.Messages.radio_off, 2);
         cls.radios_disable(cls.Oids.radio_2400_guest);
         cls.radios_disable(cls.Oids.radio_5000_guest);
@@ -303,8 +248,7 @@ class WLAN:
 
     @classmethod
     def guest_enable(cls) -> None:
-        """ Enables the Guest WLAN """
-
+        """Enables the Guest WLAN."""
         printx(cls.Messages.radio_on, 2);
         cls.radios_enable(cls.Oids.radio_2400_guest);
         cls.radios_enable(cls.Oids.radio_5000_guest);
@@ -388,8 +332,7 @@ class WLAN:
 
     @classmethod
     def apply_changes(cls) -> bool:
-        """ Applies the WLAN changes requested to the router """
-
+        """Applies the WLAN changes requested to the router."""
         response_raw = web(superhub_ip_addr
                            + cls.Oids.prefix
                            + cls.Oids.apply_changes
@@ -407,7 +350,7 @@ class WLAN:
     def operate(cls, function_id) -> None:
         """ Handles the enabling and disabling of the WLANs
 
-            Keyword arguments:
+            Keyword Arguments:
             function_id -- wlan configuration to apply
                 0 - Disable WLAN
                 1 - Enable WLAN
@@ -415,34 +358,29 @@ class WLAN:
                 3 - Enable Guest WLAN"""
 
         if function_id == "0":
-            """ Disable WLAN """
-
+            """Disable WLAN."""
             printx(cls.Messages.disable+cls.Messages.radios);
             cls.radios_disable(cls.Oids.radio_2400_main);
             cls.radios_disable(cls.Oids.radio_5000_main);
 
         elif function_id == "1":
-            """ Enable WLAN """
-
+            """Enable WLAN."""
             printx(cls.Messages.enable+cls.Messages.radios);
             cls.radios_enable(cls.Oids.radio_2400_main);
             cls.radios_enable(cls.Oids.radio_5000_main);
 
         elif function_id == "2":
-            """ Disable Guest WLAN """
-
+            """Disable Guest WLAN."""
             printx(cls.Messages.disable+cls.Messages.guest+cls.Messages.radios);
             cls.guest_disable();
 
         elif function_id == "3":
-            """ Enable Guest WLAN """
-
+            """Enable Guest WLAN."""
             printx(cls.Messages.enable+cls.Messages.guest+cls.Messages.radios);
             cls.guest_enable();
 
         else:
-            """ Parameter not recognised """
-
+            """Parameter not recognised."""
             printx(cls.ErrorMessages.specify_parameter);
             return None;
 
@@ -464,12 +402,10 @@ class Utility:
     """Static 'utility' methods"""
 
     class Convert:
-        """ A group of static conversion methods """
-
+        """A group of static conversion methods."""
         @staticmethod
         def hex_to_ipv4(hex: str) -> str:
-            """ Converts a hexadecimal encoded IP address into a decimal dot separated string """
-
+            """Converts a hexadecimal encoded IP address into a decimal dot separated string."""
             if len(hex) < 8:
                 return "0.0.0.0";
             else:
@@ -480,8 +416,7 @@ class Utility:
 
         @staticmethod
         def ipv4_to_hex(ipv4: str) -> str:
-            """ Converts a decimal dot separated string to a hexadecimal encoded IP address """
-
+            """Converts a decimal dot separated string to a hexadecimal encoded IP address."""
             ip = ipv4.split(".");
             if len(ip) != 4:
                 return "$00000000";
@@ -493,8 +428,7 @@ class Utility:
                 return "$"+"".join(ip);
 
     class Epoch:
-        """ A group of static time manipulation methods """
-
+        """A group of static time manipulation methods."""
         @staticmethod
         def duration(epoch: int) -> list:
             """ Converts a given epoch timestamp into a list containing days, hours, minutes and seconds """
@@ -508,11 +442,9 @@ class Utility:
 
 
 class Hub:
-    """ Static methods which administer the hub """
-
+    """Static methods which administer the hub."""
     class Messages:
-        """ Index of various status messages """
-
+        """Index of various status messages."""
         author = "SuperHub 3 Client API by Nicholas Elliott";
         version = "Version "+version;
         searching = "Searching for "+superhub_ip_addr+"...";
@@ -523,15 +455,13 @@ class Hub:
         firmware_check = "Checking firmware compatibility...";
 
     class ErrorMessages:
-        """ Index of various exception error messages """
-
+        """Index of various exception error messages."""
         not_found = "Could not find SuperHub, please ensure the correct IP address is set";
         login_failed = "Could not login to SuperHub, password may be incorrect";
         firmware_warn = "Couldn't check firmware version, something must have went wrong with the login.";
 
     class Oids:
-        """ Index of the OIDs used by the Hub class """
-
+        """Index of the OIDs used by the Hub class."""
         prefix_set = "/snmpSet?oid=";
         prefix_get = "/snmpGet?oids=";  # changed for bulk fetching diagnostic info
         prefix_walk = "/walk?oids=";
@@ -552,11 +482,11 @@ class Hub:
 
     @staticmethod
     def login(hubpass: str) -> bool:
-        """Authenticates with the hub using a given password, returns Boolean
+        """Authenticates with the hub using a given password, returns Boolean.
 
-        Keyword arguments:
-        hubpass -- SuperHub password"""
-
+        Keyword Arguments:
+        hubpass -- SuperHub password
+        """
         global superhub_cookie_header;
         if len(superhub_cookie_header) < 1:
             hublogin_credentials = bytes(base64.b64encode(bytes(superhub_username+":"+hubpass, "UTF-8"))).decode("utf-8");
@@ -573,8 +503,7 @@ class Hub:
 
     @staticmethod
     def logout() -> None:
-        """ Handles logging out of the hub """
-
+        """Handles logging out of the hub."""
         global superhub_cookie_header;
         if len(superhub_cookie_header) > 0:
             printx("Logging out...");
@@ -583,13 +512,12 @@ class Hub:
                 printx("--! Couldn't logout. Would you like to try again (Y/N)?");
                 retry = input();
                 if retry in ["Y", "y"]:
-                    logout();
+                    pass;  # logout();
             superhub_cookie_header = "";
 
     @staticmethod
     def find() -> bool:
-        """ Locates the hub at the IP address specified in superhub_ip_addr """
-
+        """Locates the hub at the IP address specified in superhub_ip_addr."""
         html = web(superhub_ip_addr
                    + Hub.Oids.prefix_walk
                    + Hub.Oids.router_status
@@ -634,8 +562,7 @@ class Hub:
 
     @staticmethod
     def reboot() -> None:
-        """ Reboots the hub and exits """
-
+        """Reboots the hub and exits."""
         printx("Rebooting your SuperHub...");
         web(superhub_ip_addr
             + Hub.Oids.prefix_set
@@ -690,8 +617,7 @@ class Hub:
 
     @staticmethod
     def diagnostic():
-        """ Retrieves and prints statistical information about the router """
-
+        """Retrieves and prints statistical information about the router."""
         diagnostics_index = {Hub.Oids.router_firmware: None,
                              Hub.Oids.router_hardwrev: None,
                              Hub.Oids.router_uptime: None,
@@ -760,12 +686,10 @@ class Hub:
 
 
 class Main:
-    """ Core script methods """
-
+    """Core script methods."""
     @staticmethod
     def menu():
-        """ Main menu for console interface """
-
+        """Main menu for console interface."""
         printx();
         printx("   help         Show this menu")
         printx("   wlan 0/1     Toggle Private WLAN off/on");
@@ -778,8 +702,7 @@ class Main:
 
     @staticmethod
     def console():
-        """ Handles user input """
-
+        """Handles user input."""
         command = "";
         while command.split(" ")[0] not in ["reboot", "q", "exit"]:
             command = input("Enter a command: ");
@@ -801,8 +724,7 @@ class Main:
 
     @staticmethod
     def app():
-        """ Entry point """
-
+        """Entry point."""
         global superhub_cookie_header;
         global superhub_password;
 
