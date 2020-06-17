@@ -1,5 +1,5 @@
 # SuperHub3-CLI
-A command-line interface for interacting with the Virgin Media SuperHub 3/ARRIS TG2492S/CE broadband router. Allows listing current/past connected devices, toggle private/guest WLAN, rebooting and viewing router status.
+A command-line interface and API for interacting with the Virgin Media SuperHub 3/ARRIS TG2492S/CE broadband router. Allows listing current/past connected devices, toggle private/guest WLAN, rebooting and viewing router status.
 
 **Warning: This branch is for version 2.0.0 which is in development. Some features may be broken - please use the stable 1.x.x branch for now.**
 
@@ -31,9 +31,18 @@ The router's status, such as uptime and WAN address, can be viewed through the m
 ### Rebooting the router
 You can reboot the router via the menu, or through the `--reboot` command line argument.
 
+### Query OIDs
+**Dev Note: Not Documented in Wiki**
+You can query a list of comma-separated OIDs using the `--oid` command line argument.
+
 ## Misc
 ### Output modes
 Multiple output modes are available through command line arguments, such as a json-compatible output or verbose mode if desired, [see here](../../wiki/Command-Line-Arguments#other).
+
+## Development
+### Files
+- `pyproject.toml` Used by [Poetry](https://python-poetry.org) for package management. If this file is modified, use `poetry check` to validate the syntax.
+- `setup.cfg` Used by pycodestyle and pydocstyle.
 
 ## Feedback
 ### Feature Suggestions
