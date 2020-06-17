@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "superhubclientsapi"
+version = "2.0.a1"
+description = "A command line interface for interacting with the Virgin Media SuperHub 3"
+authors = ["JamoDevNich <github@nich.dev>"]
+repository = "https://github.com/JamoDevNich/SuperHub3-CLI"
+documentation = "https://github.com/JamoDevNich/SuperHub3-CLI/wiki"
+readme = "README.md"
+license = "LGPL-3.0"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Networking"
+]
+
+[tool.poetry.scripts]
+
+[tool.poetry.dependencies]
+python = "^3.5"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
